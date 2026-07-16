@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>inspire_hand_modbus</name>
+  <version>0.0.1</version>
+  <description>The inspire_hand_modbus package</description>
+
+  <maintainer email="your_email@example.com">Your Name</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- 编译时依赖 -->
+  <build_depend>message_generation</build_depend>
+  <build_depend>libmodbus-dev</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>std_msgs</build_depend>  <!-- 添加std_msgs作为构建依赖 -->
+
+  <!-- 运行时依赖 -->
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>serial</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <export>
+    <message_generation/>
+  </export>
+</package>
+

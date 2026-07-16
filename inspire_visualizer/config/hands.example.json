@@ -1,0 +1,16 @@
+{
+  "left": {
+    "enabled": false,
+    "host": "192.0.2.11",
+    "port": 6000,
+    "tactile_profile": "disabled",
+    "tactile_target_hz": 20
+  },
+  "right": {
+    "enabled": true,
+    "host": "192.0.2.10",
+    "port": 6000,
+    "tactile_profile": "piezoresistive_v1",
+    "tactile_target_hz": 20
+  }
+}

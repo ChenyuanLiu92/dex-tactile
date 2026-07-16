@@ -1,0 +1,9 @@
+# Request
+#接收的命令类型
+string status
+#灵巧手ID
+int16 id
+---
+# Response
+int16[6] statusvalue
+bool success

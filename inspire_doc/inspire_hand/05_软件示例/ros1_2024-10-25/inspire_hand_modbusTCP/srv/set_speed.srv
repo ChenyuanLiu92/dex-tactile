@@ -1,0 +1,15 @@
+# Request
+#接收的命令类型
+string status
+#灵巧手ID
+int16 id
+#速度设置值
+int32 speed0
+int32 speed1
+int32 speed2
+int32 speed3
+int32 speed4
+int32 speed5
+---
+# Response
+bool speed_accepted

@@ -1,0 +1,60 @@
+robot_name: inspire_rh56dftp
+
+detector:
+  _target_: openteach.components.detector.oculus.OculusVRHandDetector
+  host: ${host_address}
+  oculus_port: ${oculus_reciever_port}
+  keypoint_pub_port: ${keypoint_port}
+  button_port: ${resolution_button_port}
+  button_publish_port: ${resolution_button_publish_port}
+  teleop_reset_port: ${teleop_reset_port}
+  teleop_reset_publish_port: ${teleop_reset_publish_port}
+
+transforms:
+  - _target_: openteach.components.detector.keypoint_transform.TransformHandPositionCoords
+    host: ${host_address}
+    keypoint_port: ${keypoint_port}
+    transformation_port: ${transformed_position_keypoint_port}
+    moving_average_limit: 3
+
+visualizers: []
+
+operators:
+  - _target_: openteach.components.operators.inspire.InspireHandOperator
+    host: ${host_address}
+    transformed_keypoints_port: ${transformed_position_keypoint_port}
+    teleop_reset_port: ${teleop_reset_publish_port}
+    control_frequency: 30
+    robot:
+      _target_: openteach.robot.inspire.hand.InspireHand
+      host: ${oc.env:RH56_HOST,192.0.2.10}
+      port: ${oc.env:RH56_PORT,6000}
+      dry_run: true
+      speed: 30
+      force: [220, 120, 120, 120, 220, 220]
+      log_commands: true
+    retargeting:
+      backend: dex
+      open_bend: 0.08
+      closed_bend: 0.55
+      thumb_open_bend: 0.05
+      thumb_closed_bend: 0.45
+      thumb_rotation_open: 1.25
+      thumb_rotation_closed: 0.35
+      max_step: 35
+      adaptive_motion:
+        enabled: true
+        deadband: 8
+        error_thresholds: [40, 180]
+        max_steps: [20, 60, 120]
+        speeds: [100, 260, 450]
+        hysteresis: 10
+
+controllers:
+  - _target_: openteach.robot.inspire.hand.InspireHand
+    host: ${oc.env:RH56_HOST,192.0.2.10}
+    port: ${oc.env:RH56_PORT,6000}
+    dry_run: true
+
+recorded_data:
+  - [joint_states, commanded_joint_states]

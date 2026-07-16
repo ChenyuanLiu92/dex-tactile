@@ -1,0 +1,20 @@
+# Request
+#接收的命令类型
+string status
+#灵巧手ID
+int16 id
+#灵巧手角度设置值(范围0-2000)
+int32 pos0
+int32 pos1
+int32 pos2
+int32 pos3
+int32 pos4
+int32 pos5
+
+---
+
+# Response
+bool pos_accepted
+bool success
+
+

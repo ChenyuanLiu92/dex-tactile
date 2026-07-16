@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "models": {
+    "left": {
+      "urdf": "left/left.urdf",
+      "package": "urdf_left",
+      "mesh_count": 14,
+      "sha256": "d9081d296eaf587f0d15c4931d4233bf36cc5e2dfebbdf34a22e095aacf64fda",
+      "source": "inspire_doc/inspire_hand/04_URDF模型/left_ftp_ros1"
+    },
+    "right": {
+      "urdf": "right/right.urdf",
+      "package": "urdf_right",
+      "mesh_count": 13,
+      "sha256": "921316d3532857635fac97049c4a022d2c4bf000adb94d206edbb6bbcb6be811",
+      "source": "inspire_doc/inspire_hand/04_URDF模型/right_ftp_ros1/urdf/urdf_right.xacro"
+    }
+  }
+}

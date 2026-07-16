@@ -1,0 +1,10 @@
+# Request
+#接收的命令类型
+string status
+#灵巧手ID
+int16 id
+#手势序列号
+int32 gesture_no
+---
+# Response
+bool gesture_nograb

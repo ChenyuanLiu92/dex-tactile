@@ -1,0 +1,8 @@
+# Request
+#接收的命令类型
+string status
+int16 id
+---
+# Response
+bool idgrab
+bool success

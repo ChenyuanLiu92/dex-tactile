@@ -1,0 +1,76 @@
+1.ros2_ws包支持因时机器人公司的灵巧手与机械夹爪在ROS2.0平台上的使用。
+2.为了使程序能够正常运行，需要进行ros2.0环境配置，安装对应依赖。
+    1) 新建文件夹ros2_ws,在此文件夹下创建src文件夹
+    2) 将inspire_hand.zip压缩包解压后的三个文件夹放入src文件夹下
+    3）在ros2_ws下打开新终端，运行指令colcon build，编译成功后继续
+3.灵巧手使用
+    1）将灵巧手与电脑连接，查看连接端口名称。
+       终端指令：ls /dev/tty*（端口名称应该会显示/dev/ttyUSB0或者是/dev/ttyUSB1、/dev/ttyUSB2等）,功能包默认使用的串口为/dev/ttyUSB0，若串口名称不一致可修改程序。
+       注:使用前需给串口添加可执行权限
+    2) 下面就是正式启动命令。使用launch命令来启动程序：
+        (1) 如果串口名称是默认的ttyUSB0。终端指令：cd ~/ros2_ws
+                                                 colcon build
+
+    3) 如果上一步编译成功，那么就可以使用后续的命令了：
+       注意： 需要重新打开一个新的终端，并执行终端指令：cd ~/ros2_ws
+                                                 source install/setup.bash
+						 ros2 run inspire_hand Hand_control_node
+    4）在ros2_ws下重新打开终端先运行指令：source install/setup.bash
+                             
+                之后运行以下指令控制灵巧手
+    
+      (1)ros2 service call /Setpos service_interfaces/srv/Setpos "{pos0: num0,pos1: num2,pos2: num2,pos3: num3,pos4: num4,pos5: num5,hand_id: 1, status: 'set_pos'}"
+      设置六个驱动器位置------参数num0-num5范围0-2000,默认灵巧手ID为1
+
+      (2)ros2 service call /Setangle service_interfaces/srv/Setangle "{angle0: num0,angle1: num2,angle2: num2,angle3: num3,angle4: num4,angle5: num5,hand_id: 1, status: 'set_angle'}"
+      设置灵巧手角度------参数num0-num5范围-1-1000
+
+      (3)ros2 service call /Setforce service_interfaces/srv/Setforce "{force0: num0,force1: num2,force2: num2,force3: num3,force4: num4,force5: num5,hand_id: 1, status: 'set_force'}"
+      设置力控阈值------参数num0-num5范围-1000
+
+      (4)ros2 service call /Setspeed service_interfaces/srv/Setspeed "{speed0: num0,speed1: num2,speed2: num2,speed3: num3,speed4: num4,speed5: num5,hand_id: 1, status: 'set_speed'}"
+      设置速度------参数num0-num5范围-1000
+
+      (5)ros2 service call /Getposact service_interfaces/srv/Getposact "{hand_id: 1, status: 'get_posact'}"
+      读取驱动器实际的位置值
+
+      (6)ros2 service call /Getangleact service_interfaces/srv/Getangleact "{hand_id: 1, status: 'get_angleact'}"
+      读取实际的角度值
+
+      (7)ros2 service call /Getforceact service_interfaces/srv/Getforceact "{hand_id: 1, status: 'get_forceact'}"
+      读取实际的受力
+
+      (8)ros2 service call /Getposset service_interfaces/srv/Getposset "{hand_id: 1, status: 'get_posset'}"
+      读取驱动器设置的位置值
+
+      (9)ros2 service call /Getangleset service_interfaces/srv/Getangleset "{hand_id: 1, status: 'get_angleset'}"
+      读取设置的角度值
+
+      (10)ros2 service call /Getforceset service_interfaces/srv/Getforceset "{hand_id: 1, status: 'get_forceset'}"
+      读取设置的力控阈值
+      
+      (11)ros2 service call /Geterror service_interfaces/srv/Geterror "{hand_id: 1, status: 'get_error'}"
+      读取故障信息
+      
+      (12)ros2 service call /Getspeedset service_interfaces/srv/Getspeedset "{hand_id: 1, status: 'get_speedset'}"
+      读取设置的速度
+      
+      (13)ros2 service call /Gettemp service_interfaces/srv/Gettemp "{hand_id: 1, status: 'get_temp'}"
+      读取温度信息
+
+      (14)ros2 service call /Getcurrentact service_interfaces/srv/Getcurrentact "{hand_id: 1, status: 'get_currentact'}"
+      读取电流
+      
+      (15)ros2 service call /Setgestureno service_interfaces/srv/Setgestureno "{gesture_no: 1,hand_id: 1, status: 'set_gesture_no'}"
+      手势序列，gesture_no范围为1-13
+
+
+
+
+
+
+
+
+
+
+

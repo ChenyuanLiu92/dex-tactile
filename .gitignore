@@ -1,0 +1,38 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.superpowers/
+datasets/
+*.partial.h5
+*.log
+inspire_visualizer/config/hands.json
+inspire_visualizer/config/tactile_calibration.json
+inspire_visualizer/web/node_modules/
+inspire_visualizer/web/dist/
+inspire_visualizer/web/playwright-report/
+inspire_visualizer/web/test-results/
+inspire_visualizer/web/*.tsbuildinfo
+inspire_visualizer/web/vite.config.js
+inspire_visualizer/web/vite.config.d.ts
+dex-retargeting/viewer/config/retargeting-calibration.json
+dex-retargeting/viewer/web/node_modules/
+dex-retargeting/viewer/web/dist/
+dex-retargeting/viewer/web/playwright-report/
+dex-retargeting/viewer/web/test-results/
+
+# The checked-in APKs are sufficient for RH56 operation. Fetch the original
+# Unity projects from the Open-Teach upstream repository when rebuilding them.
+Open-Teach/VR/Bimanual-Robot-Unity/
+Open-Teach/VR/Franka-Bot-Unity/
+
+# Generated ROS/CMake output bundled with some manufacturer examples.
+inspire_doc/**/build/
+inspire_doc/**/install/
+inspire_doc/**/log/
