@@ -81,7 +81,7 @@ thumb_flexion, thumb_opposition
 macOS 安装示例：
 
 ```bash
-brew install uv node android-platform-tools
+brew install uv node android-platform-tools librealsense jpeg-turbo
 ```
 
 Linux 请使用 uv 官方安装方式和发行版对应的 Node.js/ADB 包。首次克隆后在仓库根目录执行：
@@ -91,13 +91,10 @@ uv sync --all-groups
 
 npm ci --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
-
-npm ci --prefix dex-retargeting/viewer/web
-npm run build --prefix dex-retargeting/viewer/web
 ```
 
-`uv run` 会自动使用根目录 `.venv`，不要再手动 `pip install`。前端依赖分别由两个
-`package-lock.json` 管理，不要提交 `node_modules/` 或 `dist/`。
+`uv run` 会自动使用根目录 `.venv`，不要再手动 `pip install`。统一前端依赖由
+`inspire_visualizer/web/package-lock.json` 管理，不要提交 `node_modules/` 或 `dist/`。
 
 ### 可选：将缓存放到外置 SSD
 
@@ -128,6 +125,8 @@ cp inspire_visualizer/config/hands.example.json \
 RH56_HOST=YOUR_HAND_IP
 RH56_PORT=6000
 OPENTEACH_HOST=YOUR_WORKSTATION_IP_VISIBLE_TO_QUEST
+D435_CAMERA_SOURCE=avfoundation
+D435_CAMERA_INDEX=0
 ```
 
 然后编辑 `inspire_visualizer/config/hands.json`：
@@ -144,6 +143,7 @@ OPENTEACH_HOST=YOUR_WORKSTATION_IP_VISIBLE_TO_QUEST
 inspire_visualizer/config/hands.json
 inspire_visualizer/config/tactile_calibration.json
 dex-retargeting/viewer/config/retargeting-calibration.json
+dex-retargeting/viewer/config/operator-profiles.json
 datasets/
 *.partial.h5
 *.log
@@ -181,6 +181,21 @@ Quest 方案至少需要工作站监听 `8087` 接收关键点；Open-Teach 还�
 ./scripts/run_web.sh
 ```
 
+macOS 默认通过 AVFoundation 打开 D435 的 RGB UVC 端点，不需要 `sudo`，也不依赖
+`librealsense` 的原始 USB 访问。启动前可在系统设置的“隐私与安全性 → 摄像头”中允许当前
+终端访问摄像头。`D435_CAMERA_INDEX=0` 表示当前枚举到的第一个视频设备；接入 Continuity
+Camera 或其他 webcam 后应重新确认索引。
+
+原生 librealsense bridge 保留为显式实验选项，主要用于具备原始 USB 访问能力的环境：
+
+```bash
+./scripts/run_realsense_bridge.sh
+D435_BRIDGE_EXTERNAL=1 ./scripts/run_web.sh
+```
+
+若 AVFoundation 只枚举出名称带 `Depth` 的 D435 端点，实际画面可能是红外流，不适合当前
+MediaPipe RGB hand tracking；名称带 `RGB Module RGB` 且能抓取彩色帧时才使用该索引。
+
 默认只监听本机 `127.0.0.1:8787`。浏览器访问：
 
 ```text
@@ -210,21 +225,21 @@ curl http://127.0.0.1:8787/vision/api/health
 设备工作台通过配置槽位区分左右手，因为 RH56 协议没有可靠的只读手型字段。只会显示
 连接成功且角度回读有效的设备。
 
-### D435 dry-run 与标定
+### D435 dry-run 与操作者 Profile 标定
 
 1. 保持控制状态为 `DISARMED`。
 2. 将右手完整放入 RGB 画面，确认 `TRACKING`、21 点骨架和六通道目标连续更新。
 3. 测试张开、握拳、单指弯曲、四种指尖捏合和 tripod pinch。
-4. 手掌自然完全张开，执行 30 帧 open-hand 标定：
+4. 保持 `DISARMED`，在 Viewer 顶部的 `Operator profile` 中创建或选择操作者。
+5. 点击 Profile 管理按钮和 `Calibrate`，依次完成张开、放松、握拳、拇指对掌和 OK 捏合。
+6. 每个姿态保持稳定；Viewer 会自动收集 30 个合格样本并进入下一姿态，无需手动确认。
 
-```bash
-curl -X POST \
-  -H 'X-RH56-Control: operator-confirmed' \
-  http://127.0.0.1:8787/vision/api/retargeting/calibration/open
-curl http://127.0.0.1:8787/vision/api/retargeting/calibration
-```
-
-标定文件保存在本机 `dex-retargeting/viewer/config/retargeting-calibration.json`。
+Profile 会把每位操作者的手指弯曲范围、拇指对掌范围和捏合距离映射到 RH56 的 URDF
+可达空间。切换 Profile 会清空视觉 EMA 和接触锁存状态，但不会向真机发送位置指令。
+Profile 只能在 `DISARMED` 时创建、切换、导入、删除或标定；标定失败时可在当前姿态重试。
+配置保存在本机 `dex-retargeting/viewer/config/operator-profiles.json`，支持在管理器中导入和
+导出匿名 JSON。旧版 `retargeting-calibration.json` 首次启动时会迁移为 `Legacy calibration`，
+源文件不会被删除。
 确定性手势诊断：
 
 ```bash
@@ -380,8 +395,9 @@ HDF5 是当前 canonical 格式，因为数据是多速率压缩数值流。字�
 后端检查：
 
 ```bash
-uv run ruff check hand_data_collection inspire_visualizer/backend unified_web scripts/tests
-uv run pyright hand_data_collection/*.py inspire_visualizer/backend/src unified_web
+uv run ruff check hand_data_collection inspire_visualizer/backend unified_web scripts/tests \
+  dex-retargeting/viewer dex-retargeting/src/dex_retargeting/inspire_retargeting.py
+uv run pyright
 uv run pytest -q
 
 uv run pytest -q dex-retargeting/viewer/backend/tests
@@ -394,16 +410,12 @@ uv run pytest -q Open-Teach/tests
 npm test --prefix inspire_visualizer/web -- --run
 npm run typecheck --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
-
-npm test --prefix dex-retargeting/viewer/web
-npm run build --prefix dex-retargeting/viewer/web
 ```
 
 独立前端开发服务器：
 
 ```bash
 npm run dev --prefix inspire_visualizer/web
-npm run dev --prefix dex-retargeting/viewer/web
 ```
 
 不要在同一台灵巧手上同时运行多个真机控制后端。前端开发可以连接统一后端，但 Modbus 写入
@@ -435,8 +447,14 @@ Rollback:
 ### Viewer 启动但没有相机画面
 
 - 确认 D435 使用 USB 3.x，并能被系统识别。
-- macOS 在 System Settings -> Privacy & Security -> Camera 中允许当前终端。
-- 关闭占用相机的其他程序；当前默认使用 camera index `0`。
+- 使用 AVFoundation 枚举视频端点，确认 D435 名称包含 `RGB Module RGB`。
+- 确认 `.env` 使用 `D435_CAMERA_SOURCE=avfoundation` 和当前正确的摄像头索引。
+- 在系统设置的“隐私与安全性 → 摄像头”中允许当前终端访问摄像头。
+- `D435_CAMERA_ROTATION=90/180/270` 可按顺时针方向修正物理安装角度。
+- AVFoundation 数字索引可能在手机连续互通相机或其他 webcam 接入后重新排序，不要永久
+  假定 `0` 一定对应 D435。
+- `RS2_USB_STATUS_ACCESS` 属于 librealsense 原始 USB 接口权限，与 AVFoundation 摄像头权限
+  不同；当前 macOS 策略不依赖该接口。
 
 ### `DISCONNECTED` 或 Modbus 超时
 
@@ -467,14 +485,13 @@ Quest 3. All committed network addresses are non-routable documentation examples
 
 ```bash
 uv sync --all-groups
+brew install librealsense jpeg-turbo  # macOS D435 RGB bridge
 cp .env.example .env
 cp inspire_visualizer/config/hands.example.json inspire_visualizer/config/hands.json
 # Edit both local files with your hardware endpoints.
 
 npm ci --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
-npm ci --prefix dex-retargeting/viewer/web
-npm run build --prefix dex-retargeting/viewer/web
 
 ./scripts/run_web.sh                 # unified workbench
 ./scripts/run_openteach.sh           # Quest dry-run

@@ -23,7 +23,7 @@ import { TactilePanel } from './tactile/TactilePanel'
 import { CalibrationWorkspace } from './tactile/CalibrationWorkspace'
 import { TactileAtlas2D, type TactileAtlasView } from './tactile/TactileAtlas2D'
 import { CALIBRATION_REGION_ORDER, contactStep, initialCalibrationSession, type GuidedCalibrationSession } from './tactile/calibrationSession'
-import type { HeatStyle, TactileSelection } from './tactile/TactileOverlay'
+import type { HeatStyle, TactileSelection } from './tactile/displayTypes'
 import './styles.css'
 
 const OPEN_ANGLES: ChannelValues = [1000, 1000, 1000, 1000, 1000, 1000]
@@ -57,6 +57,7 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
   const [selection, setSelection] = useState<TactileSelection | null>(null)
   const [zeroingSide, setZeroingSide] = useState<HandSide | null>(null)
   const [calibrations, setCalibrations] = useState<Partial<Record<HandSide, TactileCalibrationDocument | null>>>({})
+  const [calibrationLoadRevision, setCalibrationLoadRevision] = useState(0)
   const [calibration, setCalibration] = useState<(GuidedCalibrationSession & { samples: CalibrationSample[]; focusToken: number }) | null>(null)
   const zeroCapture = useRef<{
     side: HandSide
@@ -67,8 +68,11 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
   const calibrationSequence = useRef(-1)
   const calibrationReference = useRef<ChannelValues | null>(null)
   const calibrationPoseMovedSince = useRef<number | null>(null)
+  const loadedCalibrationSides = useRef<Record<HandSide, boolean>>({ left: false, right: false })
   const previousConnections = useRef({ left: 'offline', right: 'offline' })
   const visibleSides = useMemo(() => onlineHands(hands), [hands])
+  const leftVisible = visibleSides.includes('left')
+  const rightVisible = visibleSides.includes('right')
 
   useEffect(() => {
     const newlyOnline = (['left', 'right'] as const).filter(
@@ -102,8 +106,18 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
   }, [activeSide, visibleSides])
 
   useEffect(() => {
-    for (const side of visibleSides) loadTactileCalibration(side).then((document) => setCalibrations((current) => ({ ...current, [side]: document }))).catch(() => undefined)
-  }, [visibleSides])
+    const sides: HandSide[] = [
+      ...(leftVisible ? ['left' as const] : []),
+      ...(rightVisible ? ['right' as const] : []),
+    ]
+    for (const side of sides) {
+      if (loadedCalibrationSides.current[side]) continue
+      loadedCalibrationSides.current[side] = true
+      loadTactileCalibration(side)
+        .then((document) => setCalibrations((current) => ({ ...current, [side]: document })))
+        .catch(() => undefined)
+    }
+  }, [calibrationLoadRevision, leftVisible, rightVisible])
 
   useEffect(() => {
     const capture = zeroCapture.current
@@ -124,6 +138,8 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
   const refreshDiscovery = useCallback(async () => {
     const response = await fetch('/api/discovery/refresh', { method: 'POST' })
     if (!response.ok) throw new Error(t('error.discovery'))
+    loadedCalibrationSides.current = { left: false, right: false }
+    setCalibrationLoadRevision((current) => current + 1)
   }, [t])
 
   const execute = (side: HandSide) => {
@@ -310,14 +326,6 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
             hands={hands}
             targets={{ left: controls.left.angles, right: controls.right.angles }}
             mode="motion"
-            tactileFrames={visibleTactileFrames}
-            baselines={baselines}
-            calibrations={calibrations}
-            heatStyle={heatStyle}
-            threshold={threshold}
-            scales={scales}
-            selection={selection}
-            onTactileSelect={setSelection}
             onModelError={setModelError}
           /> : workspaceMode === 'tactile' ? <TactileAtlas2D
             side={activeSide}
@@ -328,6 +336,7 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
             heatStyle={heatStyle}
             selection={selection}
             view={tactileView}
+            calibration={calibrations[activeSide]}
             onViewChange={setTactileView}
             onSelect={setSelection}
           /> : <div className="combined-workspace">
@@ -336,14 +345,6 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
               hands={hands}
               targets={{ left: controls.left.angles, right: controls.right.angles }}
               mode="motion"
-              tactileFrames={visibleTactileFrames}
-              baselines={baselines}
-              calibrations={calibrations}
-              heatStyle={heatStyle}
-              threshold={threshold}
-              scales={scales}
-              selection={selection}
-              onTactileSelect={setSelection}
               onModelError={setModelError}
             /></div>
             <TactileAtlas2D
@@ -356,6 +357,7 @@ export default function App({ controlEnabled = true }: { controlEnabled?: boolea
               heatStyle={heatStyle}
               selection={selection}
               view={tactileView}
+              calibration={calibrations[activeSide]}
               onViewChange={setTactileView}
               onSelect={setSelection}
             />

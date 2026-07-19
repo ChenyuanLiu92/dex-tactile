@@ -24,7 +24,7 @@ dex_retargeting = { path = "dex-retargeting", editable = true }
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
+    "httpx2>=2.7.0",
     "pyright>=1.1.403",
     "pytest>=8.4.1",
     "ruff>=0.12.3",
@@ -46,3 +46,19 @@ pythonpath = [".", "dex-retargeting", "inspire_visualizer/backend/src", "Open-Te
 
 [tool.pyright]
 extraPaths = ["dex-retargeting", "inspire_visualizer/backend/src", "Open-Teach"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+include = [
+    "hand_data_collection/*.py",
+    "inspire_visualizer/backend/src",
+    "unified_web/*.py",
+    "dex-retargeting/viewer/backend",
+    "dex-retargeting/src/dex_retargeting/inspire_retargeting.py",
+    "Open-Teach/openteach/robot/inspire",
+    "Open-Teach/openteach/components/operators/inspire.py",
+]
+exclude = [
+    "**/__pycache__",
+    "**/tests",
+]

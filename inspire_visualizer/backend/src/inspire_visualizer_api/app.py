@@ -6,14 +6,16 @@ from pathlib import Path
 from time import monotonic
 from typing import Any
 from uuid import uuid4
+from threading import RLock
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from inspire_visualizer_api.config import ConfigStore, HandsConfig
 from inspire_visualizer_api.device.manager import (
+    ControlSessionBusy,
     DeviceManager,
     DeviceUnavailable,
     NotArmed,
@@ -196,6 +198,13 @@ def create_app(
 
     app = FastAPI(title="Inspire Hand Visualizer", version="0.1.0", lifespan=lifespan)
     app.state.allow_control = allow_control
+    app.state.control_gate = RLock()
+
+    def invoke_manual_control(action, *args, **kwargs):
+        with app.state.control_gate:
+            if not app.state.allow_control:
+                raise PermissionError("Use Vision Control to operate the hand")
+            return action(*args, **kwargs)
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -219,7 +228,11 @@ def create_app(
         return config
 
     @app.get("/api/tactile-calibration/{side}", response_model=TactileCalibrationDocument | None)
-    async def get_tactile_calibration(side: str) -> TactileCalibrationDocument | None:
+    async def get_tactile_calibration(
+        side: str,
+        response: Response,
+    ) -> TactileCalibrationDocument | None:
+        response.headers["Cache-Control"] = "private, max-age=2"
         if side not in ("left", "right"):
             return None
         endpoint = app.state.store.load().left if side == "left" else app.state.store.load().right
@@ -258,22 +271,21 @@ def create_app(
                 try:
                     message = client_message_adapter.validate_python(raw_message)
                     if isinstance(message, SetArmedMessage):
-                        if not app.state.allow_control:
-                            await app.state.hub.send(
-                                websocket,
-                                {
-                                    "type": "error",
-                                    "code": "vision_control_required",
-                                    "message": "Use Vision Control to operate the hand",
-                                },
+                        if message.armed:
+                            await asyncio.to_thread(
+                                invoke_manual_control,
+                                app.state.manager.set_armed,
+                                message.side,
+                                session_id,
+                                True,
                             )
-                            continue
-                        await asyncio.to_thread(
-                            app.state.manager.set_armed,
-                            message.side,
-                            session_id,
-                            message.armed,
-                        )
+                        else:
+                            await asyncio.to_thread(
+                                app.state.manager.set_armed,
+                                message.side,
+                                session_id,
+                                False,
+                            )
                         await app.state.hub.send(
                             websocket,
                             {
@@ -283,17 +295,8 @@ def create_app(
                             },
                         )
                     elif isinstance(message, ExecutePoseMessage):
-                        if not app.state.allow_control:
-                            await app.state.hub.send(
-                                websocket,
-                                {
-                                    "type": "error",
-                                    "code": "vision_control_required",
-                                    "message": "Use Vision Control to operate the hand",
-                                },
-                            )
-                            continue
                         actual_angles = await asyncio.to_thread(
+                            invoke_manual_control,
                             app.state.manager.execute_pose,
                             message.side,
                             session_id,
@@ -316,10 +319,28 @@ def create_app(
                         websocket,
                         {"type": "error", "code": "invalid_message", "message": str(error)},
                     )
+                except PermissionError as error:
+                    await app.state.hub.send(
+                        websocket,
+                        {
+                            "type": "error",
+                            "code": "vision_control_required",
+                            "message": str(error),
+                        },
+                    )
                 except NotArmed as error:
                     await app.state.hub.send(
                         websocket,
                         {"type": "error", "code": "not_armed", "message": str(error)},
+                    )
+                except ControlSessionBusy as error:
+                    await app.state.hub.send(
+                        websocket,
+                        {
+                            "type": "error",
+                            "code": "control_session_busy",
+                            "message": str(error),
+                        },
                     )
                 except DeviceUnavailable as error:
                     await app.state.hub.send(

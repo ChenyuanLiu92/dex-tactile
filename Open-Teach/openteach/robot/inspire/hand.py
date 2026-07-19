@@ -1,4 +1,6 @@
 import time
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import numpy as np
 from pymodbus.client.sync import ModbusTcpClient
@@ -9,6 +11,24 @@ ANGLE_SET = 1486
 FORCE_SET = 1498
 SPEED_SET = 1522
 ANGLE_ACT = 1546
+
+
+class ModbusResponse(Protocol):
+    registers: Sequence[int]
+
+    def isError(self) -> bool: ...
+
+
+class ModbusClient(Protocol):
+    def connect(self) -> bool: ...
+
+    def close(self) -> None: ...
+
+    def read_holding_registers(self, address: int, count: int) -> ModbusResponse: ...
+
+    def write_registers(
+        self, address: int, values: Sequence[int]
+    ) -> ModbusResponse: ...
 
 
 class InspireHand(RobotWrapper):
@@ -30,10 +50,10 @@ class InspireHand(RobotWrapper):
         self.speed = self._expand_channels(speed, 'speed')
         self.force = self._expand_channels(force, 'force')
         self.log_commands = bool(log_commands)
-        self._client_factory = client_factory or (
+        self._client_factory: Callable[[str, int], ModbusClient] = client_factory or (
             lambda host, port: ModbusTcpClient(host, port=port, timeout=timeout)
         )
-        self._client = None
+        self._client: ModbusClient | None = None
         self._commanded = np.full(6, 1000, dtype=int)
         self._written_speed = None
         self._written_force = None
@@ -65,7 +85,8 @@ class InspireHand(RobotWrapper):
             raise ConnectionError(f'Unable to connect to Inspire hand at {self.host}:{self.port}')
 
     def _read_angles(self):
-        response = self._client.read_holding_registers(ANGLE_ACT, 6)
+        client = self._require_client()
+        response = client.read_holding_registers(ANGLE_ACT, 6)
         values = getattr(response, 'registers', ())
         if response.isError() or len(values) != 6:
             raise RuntimeError('Invalid ANGLE_ACT response from Inspire hand')
@@ -88,7 +109,7 @@ class InspireHand(RobotWrapper):
         return array
 
     def _write_registers(self, address, values):
-        response = self._client.write_registers(address, values.tolist())
+        response = self._require_client().write_registers(address, values.tolist())
         if response.isError():
             raise RuntimeError(f'Inspire Modbus write failed at register {address}')
 
@@ -119,10 +140,15 @@ class InspireHand(RobotWrapper):
             self._write_registers(ANGLE_SET, values)
         self._commanded = values.copy()
 
-    def move_coords(self, _):
+    def move_coords(self, input_coords):
         raise NotImplementedError('RH56DFTP uses six actuator position channels')
 
     def close(self):
         if self._client is not None:
             self._client.close()
             self._client = None
+
+    def _require_client(self) -> ModbusClient:
+        if self._client is None:
+            raise ConnectionError('Inspire hand is not connected')
+        return self._client

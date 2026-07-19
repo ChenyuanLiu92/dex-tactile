@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { atlasRegionGroups, taxelAtPoint } from '../src/tactile/TactileAtlas2D'
+import {
+  atlasRegionGroups,
+  nearestPositionedTaxel,
+  positionedTaxels,
+  taxelAtPoint,
+} from '../src/tactile/TactileAtlas2D'
 
 describe('2D tactile atlas', () => {
   it('organizes every RH56DFTP region and all 1062 taxels', () => {
@@ -19,5 +24,25 @@ describe('2D tactile atlas', () => {
     expect(taxelAtPoint(25, 25, 100, 120, 12, 8)).toEqual({ row: 2, column: 2 })
     expect(taxelAtPoint(100, 120, 100, 120, 12, 8)).toEqual({ row: 11, column: 7 })
     expect(taxelAtPoint(-5, -2, 100, 120, 12, 8)).toEqual({ row: 0, column: 0 })
+  })
+
+  it('applies the saved spatial calibration to 2D taxel placement and hit testing', () => {
+    const patch = atlasRegionGroups('right', 'piezoresistive_v1')
+      .flatMap((group) => group.patches)
+      .find((item) => item.id === 'index_tip')!
+    const [u0, u1] = patch.surface.uRange
+    const [v0, v1] = patch.surface.vRange
+    const positions = positionedTaxels(2, 2, patch, {
+      u: [u0, 0, u1 - u0, 0],
+      v: [v0, v1 - v0, 0, 0],
+    })
+
+    expect(positions).toEqual([
+      { row: 0, column: 0, u: 0, v: 0 },
+      { row: 0, column: 1, u: 1, v: 0 },
+      { row: 1, column: 0, u: 0, v: 1 },
+      { row: 1, column: 1, u: 1, v: 1 },
+    ])
+    expect(nearestPositionedTaxel(0.9, 0.1, positions)).toMatchObject({ row: 0, column: 1 })
   })
 })

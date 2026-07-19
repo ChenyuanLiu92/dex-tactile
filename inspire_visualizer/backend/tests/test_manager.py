@@ -4,6 +4,7 @@ import pytest
 
 from inspire_visualizer_api.config import EndpointConfig, HandsConfig
 from inspire_visualizer_api.device.manager import (
+    ControlSessionBusy,
     DeviceManager,
     DeviceUnavailable,
     NotArmed,
@@ -103,6 +104,31 @@ def test_pose_execution_requires_the_session_that_armed_the_hand() -> None:
     assert left.commands == [([900] * 6, [100] * 6, [500] * 6)]
 
 
+def test_second_session_cannot_steal_an_armed_hand() -> None:
+    left = FakeDevice(available=True)
+    manager = DeviceManager(
+        HandsConfig(
+            left=EndpointConfig(host="192.0.2.11", port=6000),
+            right=EndpointConfig(enabled=False, host="192.0.2.10", port=6000),
+        ),
+        device_factory=lambda _side, _endpoint: left,
+    )
+    manager.discover()
+    manager.set_armed("left", "session-a", True)
+
+    with pytest.raises(ControlSessionBusy):
+        manager.set_armed("left", "session-b", True)
+
+    manager.execute_pose(
+        "left",
+        "session-a",
+        angles=[850] * 6,
+        speeds=[100] * 6,
+        forces=[500] * 6,
+    )
+    assert left.commands == [([850] * 6, [100] * 6, [500] * 6)]
+
+
 def test_disarming_a_websocket_session_locks_its_hand() -> None:
     left = FakeDevice(available=True)
     manager = DeviceManager(
@@ -118,6 +144,25 @@ def test_disarming_a_websocket_session_locks_its_hand() -> None:
     manager.disarm_session("session-a")
 
     assert manager.snapshots()["left"].armed is False
+
+
+def test_disarm_all_releases_every_browser_session() -> None:
+    devices = {"left": FakeDevice(available=True), "right": FakeDevice(available=True)}
+    manager = DeviceManager(
+        HandsConfig(
+            left=EndpointConfig(host="192.0.2.11", port=6000),
+            right=EndpointConfig(host="192.0.2.12", port=6000),
+        ),
+        device_factory=lambda side, _endpoint: devices[side],
+    )
+    manager.discover()
+    manager.set_armed("left", "session-a", True)
+    manager.set_armed("right", "session-b", True)
+
+    manager.disarm_all()
+
+    assert manager.snapshots()["left"].armed is False
+    assert manager.snapshots()["right"].armed is False
 
 
 def test_poll_failure_takes_the_hand_offline_and_clears_arming() -> None:

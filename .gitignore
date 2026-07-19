@@ -22,10 +22,13 @@ inspire_visualizer/web/*.tsbuildinfo
 inspire_visualizer/web/vite.config.js
 inspire_visualizer/web/vite.config.d.ts
 dex-retargeting/viewer/config/retargeting-calibration.json
+dex-retargeting/viewer/config/operator-profiles.json
+dex-retargeting/viewer/debug/*.jsonl
 dex-retargeting/viewer/web/node_modules/
 dex-retargeting/viewer/web/dist/
 dex-retargeting/viewer/web/playwright-report/
 dex-retargeting/viewer/web/test-results/
+dex-retargeting/viewer/native/build/
 
 # The checked-in APKs are sufficient for RH56 operation. Fetch the original
 # Unity projects from the Open-Teach upstream repository when rebuilding them.

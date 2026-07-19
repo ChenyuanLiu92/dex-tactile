@@ -25,8 +25,8 @@ POSITIONING_TIMEOUT_SECONDS = 20.0
 PRESET_REACHED_TOLERANCE = 15
 PRESET_STEPS = (15, 40, 80)
 PRESET_SPEEDS = (80, 180, 300)
-VISION_CHANNEL_STEP_SCALES = (1, 1, 1, 1, 1, 2.0)
-VISION_CHANNEL_SPEED_SCALES = (1, 1, 1, 1, 1, 2.0)
+VISION_CHANNEL_STEP_SCALES = (1, 1, 1, 1, 1.5, 2.0)
+VISION_CHANNEL_SPEED_SCALES = (1, 1, 1, 1, 1.5, 2.0)
 
 
 class ControlState(StrEnum):
@@ -276,7 +276,10 @@ class VisionHandController:
                 self._replace(tracking_hold=False, tracking_loss_ms=None)
             try:
                 actual = self.driver.read_positions()
-                command = self.motion.command(self._tracking.actuators or [], actual)
+                reference = self._snapshot.commanded or actual.tolist()
+                command = self.motion.command(
+                    self._tracking.actuators or [], reference, feedback=actual
+                )
                 self.driver.write_motion(command.positions, command.speeds)
             except Exception as error:
                 self._fault(error)

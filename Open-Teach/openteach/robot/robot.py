@@ -1,27 +1,28 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 class RobotWrapper(ABC):
     @property
     @abstractmethod
-    def name(self):
+    def name(self) -> Any:
         pass
 
     @property
     @abstractmethod
-    def recorder_functions(self):
+    def recorder_functions(self) -> Any:
         pass
 
     @property
     @abstractmethod
-    def data_frequency(self):
+    def data_frequency(self) -> Any:
         pass
 
     @abstractmethod
-    def get_joint_state(self):
+    def get_joint_state(self) -> Any:
         pass
 
     @abstractmethod
-    def get_joint_position(self):
+    def get_joint_position(self) -> Any:
         pass
 
     # @abstractmethod
@@ -37,15 +38,15 @@ class RobotWrapper(ABC):
         pass
 
     @abstractmethod
-    def home(self):
+    def home(self) -> None:
         pass
 
     @abstractmethod
-    def move(self, input_angles):
+    def move(self, input_angles: Any) -> None:
         pass
 
     @abstractmethod
-    def move_coords(self, input_coords):
+    def move_coords(self, input_coords: Any) -> None:
         pass
 
     # @abstractmethod

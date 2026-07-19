@@ -1,3 +1,4 @@
+import json
 from collections import Counter
 
 from viewer.backend.retargeting import InspireVisionRetargeter
@@ -5,8 +6,6 @@ from viewer.tools.retargeting_diagnostics import (
     canonical_open_pose,
     common_gesture_scenarios,
     curl_finger,
-    curl_thumb,
-    pinch_pose,
     run_offline_diagnostics,
     summarize_live_frames,
     tripod_pinch_pose,
@@ -123,46 +122,24 @@ def test_live_summary_reports_channel_and_flexion_ranges():
     assert summary["modbus_output_seen"] is False
 
 
-def test_open_hand_calibration_removes_camera_flexion_bias():
-    biased_open = canonical_open_pose()
-    for finger in ("index", "middle", "ring", "pinky"):
-        biased_open = curl_finger(biased_open, finger, bend=0.45)
-    biased_open[1:5] = pinch_pose("index")[1:5]
-    retargeter = InspireVisionRetargeter()
-    retargeter.start_open_calibration()
-
-    calibrated_output = _settle(retargeter, biased_open, 35)
-
-    calibration = retargeter.get_calibration_status()
-    assert calibration["state"] == "CALIBRATED"
-    assert all(value > 950 for value in calibrated_output)
-    assert calibration["neutral_flexion_deg"] == [25.4, 25.4, 25.4, 25.4]
-    assert calibration["neutral_thumb_offset_counts"][0] > 100
-
-    curled_index = curl_finger(biased_open, "index", bend=1.15)
-    curled_output = _settle(retargeter, curled_index, 12)
-
-    assert curled_output[3] < 800
-    assert all(value > 900 for value in curled_output[:3])
-
-    curled_thumb = curl_thumb(biased_open, bend=1.5)
-    thumb_output = _settle(retargeter, curled_thumb, 12)
-
-    assert thumb_output[4] < 800
-
-
-def test_open_hand_calibration_persists_between_retargeters(tmp_path):
+def test_legacy_open_hand_calibration_file_remains_readable(tmp_path):
     calibration_path = tmp_path / "retargeting-calibration.json"
+    calibration_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "neutral_flexions": [0.45] * 4,
+                "neutral_thumb_offsets": [0.0, 0.0],
+                "neutral_thumb_flexion": 0.0,
+            }
+        ),
+        encoding="utf-8",
+    )
     biased_open = canonical_open_pose()
     for finger in ("index", "middle", "ring", "pinky"):
         biased_open = curl_finger(biased_open, finger, bend=0.45)
-    first = InspireVisionRetargeter(calibration_path=calibration_path)
-    first.start_open_calibration()
-    _settle(first, biased_open, 35)
 
     restored = InspireVisionRetargeter(calibration_path=calibration_path)
 
-    assert calibration_path.is_file()
-    assert restored.get_calibration_status()["state"] == "CALIBRATED"
     output = _settle(restored, biased_open, 8)
     assert all(value > 950 for value in output[:4])

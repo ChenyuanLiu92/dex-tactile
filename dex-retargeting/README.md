@@ -75,12 +75,16 @@ SAPIEN 3.0.0b0 does not publish a compatible wheel. Run the SAPIEN rendering exa
 on Linux x86_64 or Windows x86_64. MediaPipe is constrained below 0.10.30 because
 the examples use its legacy Solutions API, which newer releases removed.
 
-### D435 vision retargeting viewer
+### D435 vision retargeting service
 
-The standalone viewer uses D435 RGB camera index 0 to track a right hand, retarget
+The vision service uses D435 RGB camera index 0 to track a right hand, retarget
 21 MediaPipe landmarks to the 12-DOF Inspire URDF, and control six RH56DFTP drive
 channels through guarded Modbus output. Startup is always `DISARMED`; connecting or
 reconnecting reads the hand position but never writes a motion command.
+
+The production UI is the single frontend in `inspire_visualizer/web`, served by the
+root unified backend. Running `python -m viewer.run` starts only the isolated vision
+API for diagnostics; it does not serve a second frontend.
 
 The Viewer uses a six-variable constrained solver tailored to the Inspire coupling
 model. It optimizes the four finger flexion joints plus thumb flexion and opposition,
@@ -97,11 +101,9 @@ Pinocchio/NLopt runtime and RH56DFTP protocol.
 On macOS, allow camera access for the terminal before launching. Install and build:
 
 ```shell
-uv sync --extra dev --extra example --extra viewer
-cd viewer/web
-npm install
-npm run build
-cd ../..
+uv sync --all-groups
+npm ci --prefix inspire_visualizer/web
+npm run build --prefix inspire_visualizer/web
 ```
 
 Start the unified vision, digital-twin, and tactile workbench from the repository
@@ -114,8 +116,9 @@ cd ..
 
 Open `http://127.0.0.1:8787/` and select `VISION CONTROL`. Present the right hand
 to the mirrored RGB image. The vision API is namespaced under `/vision/api` in the
-unified server; direct `python -m viewer.run` remains available for isolated
-development.
+unified server. Direct `python -m viewer.run` remains available for isolated API
+development, but the repository has a single supported UI in
+`inspire_visualizer/web`.
 ARM is enabled only during fresh right-hand tracking. The confirmation dialog shows
 the measured and vision positions; control starts from the measured position and
 slews toward the target at 30 Hz using the Open-Teach aggressive motion profile.
@@ -150,22 +153,21 @@ The summary reports tracking states, FPS, latency, confidence, per-channel range
 per-finger flexion ranges, contact selections, and whether Modbus output was ever
 observed. A run without tracked frames exits with status 2.
 
-Before the first live session, keep control DISARMED, hold the fully open right hand
-in fresh tracking, and collect the 30-frame neutral pose:
+Before the first live session, keep control `DISARMED` and create an operator Profile
+from the selector in the Viewer top bar. Open the Profile manager, choose `Calibrate`,
+and follow the full-screen guide through open, relaxed, fist, thumb-opposition, and
+OK-pinch poses. Each pose is captured automatically after 30 stable, confident frames.
 
-```shell
-curl -X POST \
-  -H 'X-RH56-Control: operator-confirmed' \
-  http://127.0.0.1:8787/vision/api/retargeting/calibration/open
-curl http://127.0.0.1:8787/vision/api/retargeting/calibration
-```
+The five-pose Profile normalizes finger flexion, thumb opposition, and pinch contact
+for each operator. Profile switching resets visual filtering and contact-latch state
+without writing a new robot position. Profile mutations and calibration are blocked
+outside `DISARMED`. Profiles can be renamed and imported/exported as JSON from the
+manager. Local data is stored in `viewer/config/operator-profiles.json`, which is
+ignored by Git. A legacy `viewer/config/retargeting-calibration.json` is migrated to
+a `Legacy calibration` Profile without deleting the source file.
 
-Calibration removes the D435/MediaPipe open-hand angle bias from all six targets.
-The result is stored locally in `viewer/config/retargeting-calibration.json` and is
-restored on the next Viewer start; this operator-specific file is ignored by Git.
-
-Run frontend development separately with `npm run dev` from `viewer/web`; Vite
-proxies API and asset requests to port 8787.
+Run frontend development with `npm run dev --prefix inspire_visualizer/web`; Vite
+proxies device and vision API requests to the unified backend on port 8787.
 
 To move the connected hand to a fixed preset, first start the Viewer, confirm its
 control state is `DISARMED`, and clear the hand's workspace. Use the single pose
@@ -185,9 +187,20 @@ the RH56 full-open feedback can settle near `987..1000`; command targets remain
 unchanged and the adaptive motion deadband remains 8 counts. Home/Open use the
 reduced preset profile with per-cycle steps `[15, 40, 80]` and speed values
 `[80, 180, 300]`; vision control uses `[20, 60, 120]` and `[100, 260, 450]`.
-The thumb-yaw channel applies a calibrated `2.0x` response multiplier, producing
-steps `[40, 120, 240]` and speeds `[200, 520, 900]`; the other five channels keep
-the base profile.
+The thumb-bend channel applies a conservative `1.5x` response multiplier, producing
+steps `[30, 90, 180]` and speeds `[150, 390, 675]`. The thumb-yaw channel keeps its
+calibrated `2.0x` multiplier, producing steps `[40, 120, 240]` and speeds
+`[200, 520, 900]`; the four finger channels keep the base profile. Vision slew is
+advanced from the last commanded waypoint rather than delayed device feedback, so
+the thumb-yaw channel can establish target lead while retaining the per-cycle and
+device-speed limits. Speed bands continue to use measured device error, preventing
+an early slowdown while the physical hand is still catching the commanded target.
+Identical position targets are not rewritten, allowing the RH56 internal trajectory
+controller to finish the current move without restart.
+Vision force limits are `[220, 120, 120, 120, 220, 500]`. The thumb-rotation
+channel uses the official example's `500` force value so opposition does not stall
+under its higher mechanical load; the other channels retain their conservative
+limits.
 For a Viewer on another host or port, set `RH56_VIEWER_URL`, for example:
 
 ```shell

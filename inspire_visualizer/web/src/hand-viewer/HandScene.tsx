@@ -3,11 +3,8 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { Axis3D, Check, Grid3X3, RotateCcw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import type { ChannelValues, HandSide, HandsSnapshot, TactileFrames } from '../app/types'
-import { showsTactile, type WorkspaceMode } from '../app/workspaceMode'
-import type { TactileBaseline } from '../tactile/calibration'
-import type { TactileCalibrationDocument } from '../tactile/calibrationApi'
-import type { HeatStyle, TactileSelection } from '../tactile/TactileOverlay'
+import type { ChannelValues, HandSide, HandsSnapshot } from '../app/types'
+import type { WorkspaceMode } from '../app/workspaceMode'
 import { AdaptiveGrid, type GridLevelName } from './AdaptiveGrid'
 import {
   CoordinateFrame,
@@ -36,15 +33,7 @@ interface HandSceneProps {
   hands: HandsSnapshot
   targets: Record<HandSide, ChannelValues>
   mode: WorkspaceMode
-  tactileFrames: TactileFrames
-  baselines: Partial<Record<HandSide, TactileBaseline>>
-  heatStyle: HeatStyle
-  threshold: number
-  scales: Record<HandSide, number>
-  selection: TactileSelection | null
-  onTactileSelect: (selection: TactileSelection) => void
   onModelError: (message: string) => void
-  calibrations?: Partial<Record<HandSide, TactileCalibrationDocument | null>>
 }
 
 export function HandScene({
@@ -52,15 +41,7 @@ export function HandScene({
   hands,
   targets,
   mode,
-  tactileFrames,
-  baselines,
-  heatStyle,
-  threshold,
-  scales,
-  selection,
-  onTactileSelect,
   onModelError,
-  calibrations,
 }: HandSceneProps) {
   const { t } = useI18n()
   const [showGrid, setShowGrid] = useState(true)
@@ -139,7 +120,7 @@ export function HandScene({
         </div>
       </div>
       <Canvas
-        shadows
+        shadows="basic"
         dpr={[1, 2]}
         camera={{ position: [0, 0.22, 0.72], fov: 38, near: 0.01, far: 10 }}
         gl={{ antialias: true, alpha: false }}
@@ -162,19 +143,10 @@ export function HandScene({
               actual={actual}
               target={targets[side]}
               mode={mode}
-              tactileFrame={tactileFrames[side]}
-              tactileBaseline={baselines[side]}
-              heatStyle={heatStyle}
-              tactileThreshold={threshold}
-              tactileScale={scales[side]}
-              tactileDegraded={hands[side].tactile.state === 'degraded'}
-              tactileSelection={selection}
-              onTactileSelect={onTactileSelect}
               positionX={offset}
               showBaseFrame={showsBaseFrames(frameMode)}
               showActuatorFrames={showsActuatorFrames(frameMode)}
               onError={onModelError}
-              tactileCalibration={calibrations?.[side]}
             />
           ) : null
         })}
@@ -191,11 +163,6 @@ export function HandScene({
           </span>
         ))}
       </div>
-      {showsTactile(mode) ? (
-        <div className="heat-legend" aria-label={t('viewer.heatScale')}>
-          <span>{t('viewer.contact')}</span><i /><span>{t('viewer.peak')}</span><b>{t('viewer.rawCounts')}</b>
-        </div>
-      ) : null}
     </div>
   )
 }

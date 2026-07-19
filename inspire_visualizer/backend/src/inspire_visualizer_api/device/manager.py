@@ -22,6 +22,10 @@ class NotArmed(RuntimeError):
     pass
 
 
+class ControlSessionBusy(RuntimeError):
+    pass
+
+
 class TactileUnavailable(RuntimeError):
     pass
 
@@ -192,6 +196,13 @@ class DeviceManager:
             if armed:
                 if session.connection != "online" or self._is_stale(session):
                     raise DeviceUnavailable(f"{side} hand has no fresh device state")
+                if (
+                    session.armed_session is not None
+                    and session.armed_session != session_id
+                ):
+                    raise ControlSessionBusy(
+                        f"{side} hand is armed by another browser session"
+                    )
                 session.armed_session = session_id
             elif session.armed_session == session_id:
                 session.armed_session = None
@@ -226,6 +237,12 @@ class DeviceManager:
             with session.lock:
                 if session.armed_session == session_id:
                     session.armed_session = None
+
+    def disarm_all(self) -> None:
+        """Release every browser control session without moving the hand."""
+        for session in self._sessions.values():
+            with session.lock:
+                session.armed_session = None
 
     def reconfigure(self, config: HandsConfig) -> None:
         self.close()

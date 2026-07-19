@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import cv2
-import mediapipe as mp
 import numpy as np
+from mediapipe.python.solutions import hands as mp_hands
 
 from dex_retargeting.constants import OPERATOR2MANO_RIGHT
 
@@ -48,7 +49,7 @@ def estimate_hand_frame(points: np.ndarray) -> np.ndarray:
 class RightHandTracker:
     def __init__(self, hands=None, detection_width: int = 640):
         self.detection_width = detection_width
-        self._hands = hands or mp.solutions.hands.Hands(
+        self._hands = hands or mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
             min_detection_confidence=0.7,
@@ -59,7 +60,9 @@ class RightHandTracker:
         height, width = frame.shape[:2]
         target_height = max(1, round(height * self.detection_width / width))
         resized = cv2.resize(frame, (self.detection_width, target_height))
-        results = self._hands.process(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB))
+        results: Any = self._hands.process(
+            cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        )
         if not results.multi_hand_landmarks:
             return HandDetection(TrackingStatus.SEARCHING)
 
