@@ -1,9 +1,37 @@
-# Dex Tactile
+<div align="center">
 
-<p align="right">
-  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/Language-English-30363d?style=for-the-badge"></a>
-  <a href="README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/语言-简体中文-10a37f?style=for-the-badge"></a>
+<p>
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/EN-English-30363d?style=flat-square"></a>
+  <a href="README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/中文-简体中文-19a7a0?style=flat-square"></a>
 </p>
+
+<h1>DEX TACTILE</h1>
+
+<p><strong>面向 Inspire RH56DFTP 的视觉遥操作与触觉数据基础设施。</strong></p>
+<p>追踪人手，经过 URDF 约束重定向，对每次真机写入设置安全边界。<br>在同一个操作者工作台中检查运动状态与 1,062 个 taxel。</p>
+
+<p>
+  <img alt="RH56DFTP" src="https://img.shields.io/badge/RH56DFTP-6_CHANNEL-111827?style=for-the-badge">
+  <img alt="Python 3.11" src="https://img.shields.io/badge/PYTHON-3.11-3776ab?style=for-the-badge&logo=python&logoColor=white">
+  <img alt="uv managed" src="https://img.shields.io/badge/UV-MANAGED-de5fe9?style=for-the-badge">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FASTAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="React and Three.js" src="https://img.shields.io/badge/REACT_+_THREE.JS-WORKBENCH-20232a?style=for-the-badge&logo=react&logoColor=61dafb">
+</p>
+
+<p>
+  <a href="#快速启动">快速启动</a> ·
+  <a href="#控制架构">控制架构</a> ·
+  <a href="#硬件">硬件</a> ·
+  <a href="#d435-dry-run-与操作者-profile-标定">遥操作</a> ·
+  <a href="#手部数据采集">数据采集</a>
+</p>
+
+</div>
+
+<p align="center">
+  <img src="docs/assets/readme/workbench-overview.png" width="100%" alt="Dex Tactile 统一工作台，显示 RH56 数字孪生与触觉阵列">
+</p>
+<p align="center"><sub>运动与触觉统一工作台 · Viewer 实际输出 · 1,062-taxel 完整帧</sub></p>
 
 Dex Tactile 是面向 Inspire Robots RH56DFTP 六驱动通道压阻式触觉灵巧手的科研工作台。
 项目将 D435 RGB 手部追踪、URDF 约束重定向、Quest/Open-Teach 遥操作、受保护的
@@ -12,10 +40,27 @@ Modbus TCP 控制、二维触觉热力图/三维山峰图和 HDF5 手部数据�
 当前版本以 **右手 RH56DFTP、macOS、单台 D435、单手遥操作** 为主要验证环境。
 设备工作台可以配置并显示左右手，但 D435 和 Quest 的真机控制链路目前只向右手六通道输出。
 
+## 安全优先
+
 > [!CAUTION]
 > 灵巧手可能夹伤手指或损坏机构。首次运行、修改映射或提高速度时必须保持控制器
 > `DISARMED`，先完成 dry-run，并确保操作者能立即物理断电。界面中的 E-STOP 是软件
 > 位置保持，不等同于认证急停、驱动断能或机械限位。
+
+## 快速启动
+
+```bash
+uv sync --all-groups
+cp .env.example .env
+cp inspire_visualizer/config/hands.example.json inspire_visualizer/config/hands.json
+
+npm ci --prefix inspire_visualizer/web
+npm run build --prefix inspire_visualizer/web
+./scripts/run_web.sh
+```
+
+打开 **http://127.0.0.1:8787/**，保持控制器 `DISARMED`，在启用任何真机输出前确认相机、
+tracking、六通道反馈和触觉状态。完整配置见[软件环境](#软件环境)与[本地配置与隐私](#本地配置与隐私)。
 
 ## 功能状态
 
@@ -33,6 +78,25 @@ Modbus TCP 控制、二维触觉热力图/三维山峰图和 HDF5 手部数据�
 little_flexion, ring_flexion, middle_flexion, index_flexion,
 thumb_flexion, thumb_opposition
 ```
+
+## 控制架构
+
+```mermaid
+flowchart LR
+    D435[RealSense D435 RGB] --> TRACK[21 点手部追踪]
+    QUEST[Quest 3 / Open-Teach] --> TRACK
+    TRACK --> RETARGET[URDF 约束重定向]
+    RETARGET --> GUARD[ARM 门控 · 限幅 · 滤波 · 丢失保持]
+    GUARD --> DRIVE[RH56DFTP · 6 驱动通道]
+    DRIVE --> FEEDBACK[实测位置 + 1,062 taxel]
+    FEEDBACK --> API[统一 FastAPI 服务]
+    RETARGET --> API
+    API --> UI[React / Three.js 工作台]
+    API --> DATA[可恢复 HDF5 episode]
+```
+
+D435 与 Quest 共用同一套机器人空间约束。Modbus 写入权互斥；tracking 丢失时保持最后一个
+安全位置，直到有效的右手追踪恢复。
 
 ## 仓库结构
 

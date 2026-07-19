@@ -1,9 +1,37 @@
-# Dex Tactile
+<div align="center">
 
-<p align="right">
-  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/Language-English-10a37f?style=for-the-badge"></a>
-  <a href="README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/语言-简体中文-30363d?style=for-the-badge"></a>
+<p>
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/EN-English-19a7a0?style=flat-square"></a>
+  <a href="README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/中文-简体中文-30363d?style=flat-square"></a>
 </p>
+
+<h1>DEX TACTILE</h1>
+
+<p><strong>Vision-to-motion teleoperation and tactile data infrastructure for the Inspire RH56DFTP.</strong></p>
+<p>Track a human hand. Retarget through the robot URDF. Guard every hardware write.<br>Inspect motion and 1,062 taxels in one operator workbench.</p>
+
+<p>
+  <img alt="RH56DFTP" src="https://img.shields.io/badge/RH56DFTP-6_CHANNEL-111827?style=for-the-badge">
+  <img alt="Python 3.11" src="https://img.shields.io/badge/PYTHON-3.11-3776ab?style=for-the-badge&logo=python&logoColor=white">
+  <img alt="uv managed" src="https://img.shields.io/badge/UV-MANAGED-de5fe9?style=for-the-badge">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FASTAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="React and Three.js" src="https://img.shields.io/badge/REACT_+_THREE.JS-WORKBENCH-20232a?style=for-the-badge&logo=react&logoColor=61dafb">
+</p>
+
+<p>
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#control-architecture">Architecture</a> ·
+  <a href="#hardware">Hardware</a> ·
+  <a href="#d435-dry-run-and-operator-profile-calibration">Teleoperation</a> ·
+  <a href="#hand-data-collection">Data collection</a>
+</p>
+
+</div>
+
+<p align="center">
+  <img src="docs/assets/readme/workbench-overview.png" width="100%" alt="Dex Tactile unified workbench showing the RH56 digital twin and tactile sensor atlas">
+</p>
+<p align="center"><sub>Unified motion and tactile workspace · actual Viewer output · 1,062-taxel frame</sub></p>
 
 Dex Tactile is a research workbench for the Inspire Robots RH56DFTP six-channel dexterous hand
 with piezoresistive tactile sensing. It combines D435 RGB hand tracking, URDF-constrained
@@ -14,11 +42,30 @@ The primary validated setup is a **right-hand RH56DFTP, macOS, one D435, and sin
 teleoperation**. The device workbench can configure and display both hands, but the current D435
 and Quest live-control paths only write to the six channels of the right hand.
 
+## Safety first
+
 > [!CAUTION]
 > The dexterous hand can pinch fingers or damage its mechanism. Keep the controller `DISARMED`
 > during initial setup, mapping changes, and speed tuning. Complete a dry run first and keep a
 > physical power disconnect within reach. The UI E-STOP only commands a software position hold;
 > it is not a certified emergency stop, drive-power disconnect, or mechanical limit.
+
+## Quick start
+
+```bash
+uv sync --all-groups
+cp .env.example .env
+cp inspire_visualizer/config/hands.example.json inspire_visualizer/config/hands.json
+
+npm ci --prefix inspire_visualizer/web
+npm run build --prefix inspire_visualizer/web
+./scripts/run_web.sh
+```
+
+Open **http://127.0.0.1:8787/**, keep the controller `DISARMED`, and verify camera, tracking,
+six-channel feedback, and tactile status before enabling any hardware output. See
+[Software environment](#software-environment) and [Local configuration and privacy](#local-configuration-and-privacy)
+for complete setup details.
 
 ## Feature status
 
@@ -36,6 +83,25 @@ The six drive channels always use this order:
 little_flexion, ring_flexion, middle_flexion, index_flexion,
 thumb_flexion, thumb_opposition
 ```
+
+## Control architecture
+
+```mermaid
+flowchart LR
+    D435[RealSense D435 RGB] --> TRACK[21-point hand tracking]
+    QUEST[Quest 3 / Open-Teach] --> TRACK
+    TRACK --> RETARGET[URDF-constrained retargeting]
+    RETARGET --> GUARD[ARM gate · limits · filtering · recovery hold]
+    GUARD --> DRIVE[RH56DFTP · 6 drive channels]
+    DRIVE --> FEEDBACK[Measured position + 1,062 taxels]
+    FEEDBACK --> API[Unified FastAPI service]
+    RETARGET --> API
+    API --> UI[React / Three.js workbench]
+    API --> DATA[Recoverable HDF5 episodes]
+```
+
+The vision and Quest paths share the same robot-space constraints. Modbus ownership is exclusive,
+and tracking loss holds the last safe position until valid right-hand tracking returns.
 
 ## Repository layout
 
