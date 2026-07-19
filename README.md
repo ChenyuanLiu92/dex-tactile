@@ -1,92 +1,100 @@
 # Dex Tactile
 
-[简体中文](README.md) | [English](README.en.md)
+<p align="right">
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/Language-English-10a37f?style=for-the-badge"></a>
+  <a href="README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/语言-简体中文-30363d?style=for-the-badge"></a>
+</p>
 
-Dex Tactile 是面向 Inspire Robots RH56DFTP 六驱动通道压阻式触觉灵巧手的科研工作台。
-项目将 D435 RGB 手部追踪、URDF 约束重定向、Quest/Open-Teach 遥操作、受保护的
-Modbus TCP 控制、二维触觉热力图/三维山峰图和 HDF5 手部数据采集整合在同一仓库中。
+Dex Tactile is a research workbench for the Inspire Robots RH56DFTP six-channel dexterous hand
+with piezoresistive tactile sensing. It combines D435 RGB hand tracking, URDF-constrained
+retargeting, Quest/Open-Teach teleoperation, guarded Modbus TCP control, 2D tactile heatmaps,
+3D tactile surface plots, and HDF5 hand-data collection in one repository.
 
-当前版本以 **右手 RH56DFTP、macOS、单台 D435、单手遥操作** 为主要验证环境。
-设备工作台可以配置并显示左右手，但 D435 和 Quest 的真机控制链路目前只向右手六通道输出。
+The primary validated setup is a **right-hand RH56DFTP, macOS, one D435, and single-hand
+teleoperation**. The device workbench can configure and display both hands, but the current D435
+and Quest live-control paths only write to the six channels of the right hand.
 
 > [!CAUTION]
-> 灵巧手可能夹伤手指或损坏机构。首次运行、修改映射或提高速度时必须保持控制器
-> `DISARMED`，先完成 dry-run，并确保操作者能立即物理断电。界面中的 E-STOP 是软件
-> 位置保持，不等同于认证急停、驱动断能或机械限位。
+> The dexterous hand can pinch fingers or damage its mechanism. Keep the controller `DISARMED`
+> during initial setup, mapping changes, and speed tuning. Complete a dry run first and keep a
+> physical power disconnect within reach. The UI E-STOP only commands a software position hold;
+> it is not a certified emergency stop, drive-power disconnect, or mechanical limit.
 
-## 功能状态
+## Feature status
 
-| 模块 | 输入 | 输出 | 真机写入 |
+| Module | Input | Output | Hardware writes |
 | --- | --- | --- | --- |
-| Unified Web | D435、Modbus、触觉 | RGB/关键点、URDF、关节、二维/三维触觉 | 仅显式 ARM 后 |
-| D435 retargeting | 单目 RGB、MediaPipe 21 点 | 12 个 URDF 关节、6 个驱动目标 | 可 dry-run/ARM |
-| Open-Teach | Quest 3 手部关键点 | 同一套 RH56 重定向与 6 通道目标 | 默认 dry-run |
-| Pose scripts | 当前电机位置 | `home` 或 `open` 预设 | 是 |
-| Data collection | Tracking、真机角度、1062 taxel | 单 episode HDF5 | 否 |
+| Unified Web | D435, Modbus, tactile | RGB/keypoints, URDF, joints, 2D/3D tactile views | Only after explicit ARM |
+| D435 retargeting | Monocular RGB, 21 MediaPipe landmarks | 12 URDF joints, 6 drive targets | Dry-run or ARM |
+| Open-Teach | Quest 3 hand keypoints | Shared RH56 retargeting and 6 drive targets | Dry-run by default |
+| Pose scripts | Current motor positions | `home` or `open` preset | Yes |
+| Data collection | Tracking, measured positions, 1062 taxels | One HDF5 episode | No |
 
-六个驱动通道顺序固定为：
+The six drive channels always use this order:
 
 ```text
 little_flexion, ring_flexion, middle_flexion, index_flexion,
 thumb_flexion, thumb_opposition
 ```
 
-## 仓库结构
+## Repository layout
 
-| 目录 | 内容 |
+| Directory | Purpose |
 | --- | --- |
-| `unified_web/` | 将设备/触觉和视觉控制后端挂载到同一 FastAPI 服务 |
-| `inspire_visualizer/` | Modbus 设备管理、数字孪生、触觉采样和 React 工作台 |
-| `dex-retargeting/` | RH56 URDF、D435 tracking、SomeHand/DexPilot 风格约束和安全控制器 |
-| `Open-Teach/` | Quest 关键点接收和 RH56DFTP 遥操作适配 |
-| `hand_data_collection/` | 只读、多速率、可恢复的 HDF5 episode 采集器 |
-| `inspire_doc/` | 厂家手册、CAD、URDF 和官方通信示例 |
-| `scripts/` | 团队稳定入口；优先使用这里的脚本 |
-| `docs/` | 设计记录和阶段性技术文档 |
+| `unified_web/` | Mounts device/tactile and vision-control backends in one FastAPI service |
+| `inspire_visualizer/` | Modbus device management, digital twin, tactile sampling, and React workbench |
+| `dex-retargeting/` | RH56 URDF, D435 tracking, SomeHand/DexPilot-style constraints, and safety controller |
+| `Open-Teach/` | Quest keypoint receiver and RH56DFTP teleoperation adapter |
+| `hand_data_collection/` | Read-only, multi-rate, recoverable HDF5 episode recorder |
+| `inspire_doc/` | Manufacturer manuals, CAD, URDF, and official communication examples |
+| `scripts/` | Stable team entry points; prefer these scripts over module-level commands |
+| `docs/` | Design records and implementation notes |
 
-上游项目、基准 commit 和许可证见 [THIRD_PARTY.md](THIRD_PARTY.md)。Open-Teach 的两个
-完整 Unity 工程体积约 1.4 GB，不进入主仓库；已构建 APK 保留在 `Open-Teach/VR/APK/`。
-需要修改 APK 时，从 THIRD_PARTY 中记录的上游 commit 获取 Unity 工程。
+See [THIRD_PARTY.md](THIRD_PARTY.md) for upstream projects, pinned commits, and licenses. The two
+complete Open-Teach Unity projects are approximately 1.4 GB and are not stored in the main
+repository. Built APKs remain under `Open-Teach/VR/APK/`. Use the upstream commit recorded in
+THIRD_PARTY when rebuilding an APK.
 
-## 硬件
+## Hardware
 
-### 必需
+### Required
 
-- Inspire Robots RH56DFTP 灵巧手及厂家电源、以太网连接线
-- 能够接入灵巧手设备网段的 macOS 或 Linux 工作站
-- 可随时触达的物理断电装置
+- Inspire Robots RH56DFTP hand with the manufacturer power supply and Ethernet cable
+- A macOS or Linux workstation that can join the hand's device subnet
+- A physical power disconnect that the operator can reach immediately
 
-### 视觉遥操作
+### Vision teleoperation
 
-- Intel RealSense D435，使用 USB 3.x 连接
-- 本项目当前只读取 1280x720、30 FPS RGB，不依赖深度流
-- 相机应正对手掌活动区域，避免背光、运动模糊和手指出画
+- Intel RealSense D435 connected over USB 3.x
+- The current pipeline reads 1280x720 RGB at 30 FPS and does not require a depth stream
+- Mount the camera facing the hand workspace and avoid backlight, motion blur, and cropped fingers
 
-### Quest 遥操作（可选）
+### Quest teleoperation (optional)
 
-- Meta Quest 3，已启用 Developer Mode 和 Hand Tracking
-- 数据线，用于首次 ADB 安装 APK
-- Quest 与工作站之间可互访的局域网/Wi-Fi
+- Meta Quest 3 with Developer Mode and Hand Tracking enabled
+- A USB cable for the initial ADB installation
+- A LAN/Wi-Fi network with bidirectional connectivity between the Quest and workstation
 
-工作站可以同时使用有线网连接 RH56、使用 Wi-Fi 连接 Quest。不要把两个接口配置成
-冲突网段，也不要让工作站地址与灵巧手地址重复。
+The workstation may use wired Ethernet for the RH56 and Wi-Fi for the Quest at the same time. Do
+not configure conflicting subnets, and do not assign the workstation the hand's address.
 
-## 软件环境
+## Software environment
 
-推荐版本：
+Recommended versions:
 
-- Python `3.11`（由 `.python-version` 固定）
-- [uv](https://docs.astral.sh/uv/) `0.5+`
-- Node.js `20 LTS` 或更新版本及 npm
-- Git；安装 Quest APK 时还需要 Android Platform Tools (`adb`)
+- Python `3.11`, pinned by `.python-version`
+- [uv](https://docs.astral.sh/uv/) `0.5` or newer
+- Node.js `20 LTS` or newer, with npm
+- Git; Android Platform Tools (`adb`) is also required to install the Quest APK
 
-macOS 安装示例：
+Example macOS installation:
 
 ```bash
 brew install uv node android-platform-tools librealsense jpeg-turbo
 ```
 
-Linux 请使用 uv 官方安装方式和发行版对应的 Node.js/ADB 包。首次克隆后在仓库根目录执行：
+On Linux, use the official uv installer and the Node.js/ADB packages for your distribution. From
+the repository root, install all dependencies and build the unified frontend:
 
 ```bash
 uv sync --all-groups
@@ -95,25 +103,26 @@ npm ci --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
 ```
 
-`uv run` 会自动使用根目录 `.venv`，不要再手动 `pip install`。统一前端依赖由
-`inspire_visualizer/web/package-lock.json` 管理，不要提交 `node_modules/` 或 `dist/`。
+`uv run` automatically uses the root `.venv`; do not install project packages manually with pip.
+Frontend dependencies are locked by `inspire_visualizer/web/package-lock.json`. Do not commit
+`node_modules/` or `dist/`.
 
-### 可选：将缓存放到外置 SSD
+### Optional external-SSD caches
 
-以下目录只影响本机，不应写入仓库：
+These paths affect only the local machine and must not be committed:
 
 ```bash
 export UV_CACHE_DIR=/path/to/ssd/cache/uv
 export UV_PYTHON_INSTALL_DIR=/path/to/ssd/tools/uv/python
 ```
 
-Conda 不是本项目的 Python 包管理器。若其他项目仍需 Conda，可在 `~/.condarc` 中单独设置
-`pkgs_dirs` 和 `envs_dirs`。
+Conda is not the Python package manager for this project. If other projects still require Conda,
+configure `pkgs_dirs` and `envs_dirs` separately in `~/.condarc`.
 
-## 本地配置与隐私
+## Local configuration and privacy
 
-仓库只提交 RFC 5737 文档示例地址（`192.0.2.0/24`），这些地址不会连接真实设备。
-真实 IP、标定结果、数据集和日志都必须留在本机。
+The repository only uses RFC 5737 documentation addresses from `192.0.2.0/24`; they cannot reach
+real devices. Real IP addresses, calibration results, datasets, and logs must remain local.
 
 ```bash
 cp .env.example .env
@@ -121,7 +130,7 @@ cp inspire_visualizer/config/hands.example.json \
   inspire_visualizer/config/hands.json
 ```
 
-编辑 `.env`：
+Edit `.env`:
 
 ```dotenv
 RH56_HOST=YOUR_HAND_IP
@@ -131,14 +140,14 @@ D435_CAMERA_SOURCE=avfoundation
 D435_CAMERA_INDEX=0
 ```
 
-然后编辑 `inspire_visualizer/config/hands.json`：
+Then edit `inspire_visualizer/config/hands.json`:
 
-- 将实际连接的手设置为 `enabled: true`，另一只设置为 `false`。
-- `host` 填对应设备 IP；左右手必须使用不同端点。
-- RH56DFTP 压阻触觉使用 `piezoresistive_v1`。
-- 无触觉或不采触觉时使用 `disabled`。
+- Set the connected hand to `enabled: true` and the other hand to `false`.
+- Set `host` to the corresponding device IP. Left and right hands must use different endpoints.
+- Use `piezoresistive_v1` for RH56DFTP piezoresistive tactile sensing.
+- Use `disabled` when tactile sensing is unavailable or not needed.
 
-根目录脚本会自动加载 `.env`。以下文件已被 `.gitignore` 排除：
+Root scripts load `.env` automatically. These local artifacts are excluded by `.gitignore`:
 
 ```text
 .env
@@ -151,98 +160,107 @@ datasets/
 *.log
 ```
 
-不要在 issue、PR、截图或 HDF5 的 `--task`/`--operator` 中写入真实姓名、账号、实验室 IP、
-Wi-Fi 信息或受试者身份。`--operator` 默认保存为 `anonymous`，需要区分操作者时使用团队内
-约定的匿名编号。
+Do not put real names, account identifiers, laboratory IPs, Wi-Fi details, or participant identity
+in issues, pull requests, screenshots, or the HDF5 `--task`/`--operator` fields. The default
+operator is `anonymous`; use a team-defined anonymous identifier when operators must be separated.
 
-`inspire_doc/` 是原样保留的厂家参考资料，其中出现的私网地址属于厂家通信示例，不代表
-本实验室配置。不要把本地地址回写到这些参考文件；厂家 ROS 示例中已有的 `build/`、
-`install/` 和 `log/` 生成目录不会进入版本控制。
+`inspire_doc/` preserves manufacturer reference files verbatim. Private-network addresses inside
+that directory are manufacturer examples, not laboratory configuration. Do not write local values
+back into those files. Generated ROS `build/`, `install/`, and `log/` directories are not tracked.
 
-## 网络检查
+## Network checks
 
-1. 按厂家手册为 RH56 网口配置同网段的工作站静态地址。
-2. 确认不会与设备地址冲突。
-3. 先测试连通性，再启动控制程序：
+1. Configure a static workstation address in the RH56 subnet according to the manufacturer manual.
+2. Confirm that the workstation address does not conflict with the device.
+3. Test connectivity before starting a control process:
 
 ```bash
 ping YOUR_HAND_IP
 nc -vz YOUR_HAND_IP 6000
 ```
 
-Quest 方案至少需要工作站监听 `8087` 接收关键点；Open-Teach 还使用
-`8088-8093`、`8095`、`8100-8102`、`8110-8121`、`10005`、`10010`、`15001`
-等配置端口。若主机启用了防火墙，应只对可信局域网开放 `Open-Teach/configs/network.yaml`
-中实际启用的端口。
+The Quest path requires at least port `8087` on the workstation for incoming keypoints. Open-Teach
+also configures `8088-8093`, `8095`, `8100-8102`, `8110-8121`, `10005`, `10010`, and `15001`.
+When a firewall is enabled, expose only the ports enabled in `Open-Teach/configs/network.yaml`, and
+only to a trusted LAN.
 
-## 启动统一工作台
+## Start the unified workbench
 
-确保统一前端已经 build，然后运行：
+Build the unified frontend, then run:
 
 ```bash
 ./scripts/run_web.sh
 ```
 
-macOS 默认通过 AVFoundation 打开 D435 的 RGB UVC 端点，不需要 `sudo`，也不依赖
-`librealsense` 的原始 USB 访问。启动前可在系统设置的“隐私与安全性 → 摄像头”中允许当前
-终端访问摄像头。`D435_CAMERA_INDEX=0` 表示当前枚举到的第一个视频设备；接入 Continuity
-Camera 或其他 webcam 后应重新确认索引。
+On macOS, the default path opens the D435 RGB UVC endpoint through AVFoundation. It does not need
+`sudo` or raw librealsense USB access. Before startup, allow the current terminal under System
+Settings > Privacy & Security > Camera. `D435_CAMERA_INDEX=0` selects the first enumerated video
+device; recheck the index after connecting Continuity Camera or another webcam.
 
-原生 librealsense bridge 保留为显式实验选项，主要用于具备原始 USB 访问能力的环境：
+The native librealsense bridge remains an explicit experimental option for environments with raw
+USB access:
 
 ```bash
 ./scripts/run_realsense_bridge.sh
 D435_BRIDGE_EXTERNAL=1 ./scripts/run_web.sh
 ```
 
-若 AVFoundation 只枚举出名称带 `Depth` 的 D435 端点，实际画面可能是红外流，不适合当前
-MediaPipe RGB hand tracking；名称带 `RGB Module RGB` 且能抓取彩色帧时才使用该索引。
+If AVFoundation only exposes a D435 endpoint containing `Depth` in its name, the frames may be
+infrared and unsuitable for the current MediaPipe RGB tracker. Select an endpoint containing
+`RGB Module RGB` only after confirming that it produces color frames.
 
-默认只监听本机 `127.0.0.1:8787`。浏览器访问：
+The server listens on `127.0.0.1:8787` by default:
 
 ```text
 http://127.0.0.1:8787/
 ```
 
-健康检查：
+Health checks:
 
 ```bash
 curl http://127.0.0.1:8787/api/health
 curl http://127.0.0.1:8787/vision/api/health
 ```
 
-需要让同一可信局域网中的另一台电脑访问时，可运行：
+To allow another computer on the same trusted LAN to connect:
 
 ```bash
 ./scripts/run_web.sh --host 0.0.0.0 --port 8787
 ```
 
-此服务当前没有身份认证，不要暴露到公网。工作台包含：
+The service currently has no authentication. Never expose it to the public internet. The workbench
+contains:
 
-- `VISION CONTROL`：D435 RGB/关键点切换、左右手检测、URDF 姿态、12 关节和 6 通道目标。
-- `DIGITAL TWIN`：已配置左右手的在线状态、实际角度、目标角度和坐标系。
-- `TACTILE`：按手掌结构排列的 17 个二维触觉区域、颜色热力图和三维山峰图。
-- 中英文切换；工程标识在中文模式下仍保留英文。
+- `VISION CONTROL`: D435 RGB/keypoint modes, handedness detection, URDF pose, 12 joints, and 6 targets
+- `DIGITAL TWIN`: online state, measured/target angles, and coordinate frames for configured hands
+- `TACTILE`: 17 anatomically arranged 2D regions, a color heatmap, and a 3D surface plot
+- English/Chinese switching while preserving engineering identifiers in English
 
-设备工作台通过配置槽位区分左右手，因为 RH56 协议没有可靠的只读手型字段。只会显示
-连接成功且角度回读有效的设备。
+The device workbench identifies left and right hands by configured slots because the RH56 protocol
+does not provide a reliable read-only handedness field. A hand is displayed only after a successful
+connection and valid angle feedback.
 
-### D435 dry-run 与操作者 Profile 标定
+### D435 dry run and operator Profile calibration
 
-1. 保持控制状态为 `DISARMED`。
-2. 将右手完整放入 RGB 画面，确认 `TRACKING`、21 点骨架和六通道目标连续更新。
-3. 测试张开、握拳、单指弯曲、四种指尖捏合和 tripod pinch。
-4. 保持 `DISARMED`，在 Viewer 顶部的 `Operator profile` 中创建或选择操作者。
-5. 点击 Profile 管理按钮和 `Calibrate`，依次完成张开、放松、握拳、拇指对掌和 OK 捏合。
-6. 每个姿态保持稳定；Viewer 会自动收集 30 个合格样本并进入下一姿态，无需手动确认。
+1. Keep the controller `DISARMED`.
+2. Place the complete right hand in the RGB frame and verify `TRACKING`, 21 landmarks, and continuous
+   six-channel targets.
+3. Test opening, closing, isolated finger flexion, four fingertip pinches, and a tripod pinch.
+4. While `DISARMED`, create or select an operator under `Operator profile` at the top of the Viewer.
+5. Open Profile management and select `Calibrate`.
+6. Follow the guided open, relaxed, fist, thumb-opposition, and OK-pinch poses. Hold each pose steady;
+   the Viewer collects 30 valid samples and advances automatically.
 
-Profile 会把每位操作者的手指弯曲范围、拇指对掌范围和捏合距离映射到 RH56 的 URDF
-可达空间。切换 Profile 会清空视觉 EMA 和接触锁存状态，但不会向真机发送位置指令。
-Profile 只能在 `DISARMED` 时创建、切换、导入、删除或标定；标定失败时可在当前姿态重试。
-配置保存在本机 `dex-retargeting/viewer/config/operator-profiles.json`，支持在管理器中导入和
-导出匿名 JSON。旧版 `retargeting-calibration.json` 首次启动时会迁移为 `Legacy calibration`，
-源文件不会被删除。
-确定性手势诊断：
+A Profile maps an operator's finger-flexion, thumb-opposition, and pinch-distance ranges into the
+RH56 URDF workspace. Switching Profile clears the vision EMA and contact latch without sending a
+hardware position. Profile creation, switching, import, deletion, and calibration are allowed only
+while `DISARMED`. A failed pose can be retried without restarting the full calibration.
+
+Profiles are stored locally in `dex-retargeting/viewer/config/operator-profiles.json` and can be
+imported/exported as anonymous JSON. On first startup, legacy `retargeting-calibration.json` data is
+migrated into a `Legacy calibration` Profile; the source file is retained.
+
+Deterministic gesture diagnostics:
 
 ```bash
 cd dex-retargeting
@@ -253,89 +271,99 @@ uv run --project .. python -m viewer.tools.retargeting_diagnostics \
 cd ..
 ```
 
-### D435 真机遥操作
+### D435 live teleoperation
 
-1. 清空灵巧手运动空间，并确认没有其他进程连接 Modbus。
-2. 在 `DISARMED` 状态确认实际六通道位置读取正常。
-3. 保持右手稳定追踪，点击 `ARM` 并核对确认框中的实际值和视觉目标。
-4. 控制器先读取当前位置，再以限幅、滤波和速度限制平滑追赶视觉目标。
-5. 短暂或持续 tracking 丢失会进入 `RECOVERY HOLD`；恢复右手追踪后自动继续，不需要重新 ARM。
-6. 操作结束点击 `DISARM`。异常时先使用 E-STOP，必要时立即物理断电。
+1. Clear the hand workspace and confirm that no other process is connected to Modbus.
+2. While `DISARMED`, verify valid feedback from all six channels.
+3. Maintain stable right-hand tracking, click `ARM`, and review the measured and visual target values
+   in the confirmation dialog.
+4. The controller reads the current position first, then approaches the vision target through
+   clamping, filtering, and speed limits.
+5. Brief or sustained tracking loss enters `RECOVERY HOLD`. Control resumes automatically after
+   right-hand tracking returns; re-arming is not required.
+6. Click `DISARM` when finished. Use E-STOP on abnormal behavior and remove physical power if needed.
 
-控制器启动始终为 `DISARMED`。只有 `ARMED` 或 `POSITIONING` 会产生 Modbus 写入。
+The controller always starts `DISARMED`. Only `ARMED` and `POSITIONING` states write Modbus targets.
 
-## 固定姿态
+## Fixed poses
 
-Viewer 可开可不开；脚本会优先使用健康且 `DISARMED` 的 Viewer，否则直接连接 Modbus：
+The Viewer is optional. A pose script uses a healthy, `DISARMED` Viewer when available; otherwise it
+connects to Modbus directly:
 
 ```bash
 ./scripts/go_pose.sh open
 ./scripts/go_pose.sh home
 ```
 
-- `open`：`[1000, 1000, 1000, 1000, 1000, 1000]`
-- `home`：`[120, 120, 120, 120, 180, 480]`
+- `open`: `[1000, 1000, 1000, 1000, 1000, 1000]`
+- `home`: `[120, 120, 120, 120, 180, 480]`
 
-脚本先读取实际位置，再使用较低的 preset 步长和速度执行。`Ctrl+C` 会尝试保持当前位置。
-如果 Viewer 端口存在但不响应，脚本会拒绝直接回退，避免两个状态不明的控制器同时写设备。
+The script reads the measured position first and uses conservative preset steps and speeds.
+`Ctrl+C` attempts to hold the current position. If the Viewer port is occupied but unresponsive,
+the script refuses a direct fallback to prevent two controllers with unknown state from writing.
 
-## Quest / Open-Teach 遥操作
+## Quest / Open-Teach teleoperation
 
-### 1. 安装 APK
+### 1. Install the APK
 
-在 Quest 中启用 Developer Mode 和 Hand Tracking，USB 连接后执行：
+Enable Developer Mode and Hand Tracking on the Quest, connect USB, then run:
 
 ```bash
 adb devices
 adb install -r Open-Teach/VR/APK/SingleArmBot.apk
 ```
 
-`adb devices` 应显示一个状态为 `device` 的序列号；若显示 `unauthorized`，需要在头显中允许
-USB debugging。
+`adb devices` should show a serial with status `device`. For `unauthorized`, accept the USB debugging
+prompt inside the headset.
 
-### 2. 配置 Quest 网络
+### 2. Configure Quest networking
 
-1. 在 `.env` 中把 `OPENTEACH_HOST` 设置为 Quest 能访问到的工作站局域网地址。
-2. 在 Quest 的新安装应用中选择 `Change IP`，输入同一个地址。
-3. 启用 Stream。绿色边框表示应用已开始发送关键点，但不代表真机控制已启用。
-4. 能看到黑色手部 mask/关键点和测试物体后，再启动电脑端 dry-run。
+1. Set `OPENTEACH_HOST` in `.env` to a workstation LAN address reachable from the Quest.
+2. In the sideloaded Quest app, choose `Change IP` and enter the same address.
+3. Enable Stream. A green border means the app is sending keypoints; it does not enable robot writes.
+4. After the black hand mask/keypoints and test object appear, start the workstation dry run.
 
-### 3. Dry-run
+### 3. Dry run
 
 ```bash
 ./scripts/run_openteach.sh
 ```
 
-默认配置 `dry_run: true`，只接收 Quest 24 点骨架、执行 RH56 URDF 重定向并记录六通道目标，
-不会连接或写入灵巧手。先逐个测试四指弯曲、拇指弯曲/对掌和捏合。
+The default `dry_run: true` receives the Quest 24-point skeleton, applies RH56 URDF retargeting, and
+records six-channel targets without connecting to or writing the hand. Test four-finger flexion,
+thumb flexion/opposition, and pinching individually before live control.
 
-### 4. 真机控制
+### 4. Live control
 
-先完全停止统一 Viewer，确保只有一个 Modbus 写入者，然后运行：
+Stop the unified Viewer completely so that only one Modbus writer remains, then run:
 
 ```bash
 ./scripts/run_openteach.sh --live
 ```
 
-Open-Teach 使用与 D435 相同的 URDF 约束重定向，并在 30 Hz 控制循环中执行自适应步长、
-速度限制和输出滤波。停止时按 `Ctrl+C`；如果手仍在运动或进程失联，立即物理断电。
+Open-Teach uses the same URDF-constrained retargeting as the D435 path, with adaptive steps, speed
+limits, and output filtering in a 30 Hz loop. Stop with `Ctrl+C`. Remove physical power immediately
+if the hand continues moving or the process becomes unresponsive.
 
-## 触觉
+## Tactile sensing
 
-RH56DFTP 使用压阻式触觉。当前读取 17 个区域、共 1062 个 taxel，最高目标采样率 20 Hz；
-完整 Modbus 帧通常略低于该值。可视化同时提供：
+The RH56DFTP uses piezoresistive tactile sensors. The current implementation reads 17 regions with
+1062 taxels at a target rate up to 20 Hz; complete Modbus frames are usually slightly slower.
 
-- 二维区域热力图：按手掌和手指空间关系排列，适合定位触碰区域。
-- 三维山峰图：高度和颜色共同表达相对压力，适合观察区域内分布。
-- `Zero`：采集约 1 秒中位数作为浏览器基线，不修改设备内部标定。
+- 2D regional heatmap: arranged like a palm and fingers for contact localization
+- 3D surface plot: uses both color and height to show relative pressure distribution
+- `Zero`: records approximately one second of median data as a browser baseline; it does not change
+  calibration inside the hand
 
-原始值单位是 `raw counts`，不能直接解释为 N 或 Pa。二维布局表示阵列拓扑，不是厂家电极
-中心的精确 CAD 坐标；如需物理精确 mapping，应向厂家索取每个 taxel 的编号、三维中心、
-法向、有效面积、所属 link 和坐标系定义。
+Values are raw counts and cannot be interpreted directly as N or Pa. The 2D layout describes array
+topology, not exact CAD positions of manufacturer electrodes. Precise physical mapping requires a
+manufacturer table containing each taxel's identifier, 3D center, normal, active area, owning link,
+and coordinate-frame definition.
 
-## 手部数据采集
+## Hand-data collection
 
-当前 v1 只采手部数值，不保存 RGB、深度或机械臂数据。一次命令生成一个右手 episode：
+Version 1 records hand numerical data only; it does not save RGB, depth, or robot-arm data. One
+command creates one right-hand episode:
 
 ```bash
 ./scripts/record_hand.sh \
@@ -344,9 +372,10 @@ RH56DFTP 使用压阻式触觉。当前读取 17 个区域、共 1062 个 taxel�
   --duration 60
 ```
 
-不传 `--duration` 时，按 `Ctrl+C` 完成并原子落盘。默认输出到 `datasets/hand/`。
+Without `--duration`, press `Ctrl+C` to finalize the file atomically. Output defaults to
+`datasets/hand/`.
 
-常用参数：
+Common options:
 
 ```text
 --output PATH
@@ -355,31 +384,33 @@ RH56DFTP 使用压阻式触觉。当前读取 17 个区域、共 1062 个 taxel�
 --startup-timeout 30
 ```
 
-- `auto`：优先复用健康的统一 Viewer，否则启动只读 standalone pipeline。
-- `viewer`：要求设备和视觉两个健康检查均通过。
-- `standalone`：独立读取 D435、真机角度和触觉；没有 ARM 接口，不执行 Modbus 写入。
+- `auto`: reuse a healthy unified Viewer, otherwise start a read-only standalone pipeline
+- `viewer`: require both device and vision health checks to pass
+- `standalone`: read D435, measured positions, and tactile data independently; it has no ARM API and
+  does not write Modbus targets
 
-开始录制前必须同时满足：右手 `TRACKING`、真机六通道在线、右手触觉配置为
-`piezoresistive_v1` 且收到完整 1062-taxel 帧。短暂视觉丢失不会结束 episode；对应 tracking
-字段写入 NaN/invalid，真机和触觉流继续记录。
+Recording begins only when the right hand is `TRACKING`, all six measured channels are online, the
+right tactile profile is `piezoresistive_v1`, and a complete 1062-taxel frame has arrived. Brief
+tracking loss does not end the episode; tracking fields become NaN/invalid while robot and tactile
+streams continue.
 
 ### HDF5 v1 schema
 
-| Group | 频率 | 主要内容 |
+| Group | Rate | Contents |
 | --- | --- | --- |
-| `/frames` | 30 Hz | 21 个 2D/3D 点、12 URDF 关节、6 目标、接触与控制状态 |
-| `/robot` | 约 5 Hz | 六通道实测位置、连接与 armed 状态 |
-| `/tactile` | 最高 20 Hz | 17 区域、1062 个 `uint16` raw counts |
-| `/events` | 事件触发 | tracking 转换、无效帧、开始和停止原因 |
+| `/frames` | 30 Hz | 21 2D/3D landmarks, 12 URDF joints, 6 targets, contact/control state |
+| `/robot` | About 5 Hz | Six measured positions, connection state, and armed state |
+| `/tactile` | Up to 20 Hz | 17 regions and 1062 `uint16` raw counts |
+| `/events` | Event-driven | Tracking transitions, invalid frames, start/stop reasons |
 
-写入期间文件后缀为 `.partial.h5`，正常结束后原子改名为 `.h5`。异常退出保留 partial 文件并将
-`complete=false`，避免误用不完整数据。
+Files use `.partial.h5` during recording and are atomically renamed to `.h5` after a normal stop. An
+abnormal exit retains the partial file with `complete=false` to prevent accidental use.
 
-快速检查数据：
+Quick inspection:
 
 ```bash
 uv run python -c '
-import h5py, json, sys
+import h5py, sys
 with h5py.File(sys.argv[1], "r") as f:
     print(dict(f.attrs))
     print("frames", len(f["frames/time/elapsed"]))
@@ -388,13 +419,14 @@ with h5py.File(sys.argv[1], "r") as f:
 ' datasets/hand/YOUR_EPISODE.h5
 ```
 
-HDF5 是当前 canonical 格式，因为数据是多速率压缩数值流。字段语义可映射到 LeRobot：
-`robot/actual -> observation.state`，目标/命令 -> `action`，关键点和触觉 -> 自定义 observation。
-进入策略训练或 Hugging Face Hub 发布阶段时再增加 LeRobot v3 exporter。
+HDF5 is the canonical format because the source is compressed, multi-rate numerical data. Its
+semantics can map to LeRobot: `robot/actual` to `observation.state`, targets/commands to `action`,
+and keypoints/tactile to custom observations. Add a LeRobot v3 exporter when policy training or
+Hugging Face Hub publishing becomes necessary.
 
-## 开发与验证
+## Development and verification
 
-后端检查：
+Backend checks:
 
 ```bash
 uv run ruff check hand_data_collection inspire_visualizer/backend unified_web scripts/tests \
@@ -406,7 +438,7 @@ uv run pytest -q dex-retargeting/viewer/backend/tests
 uv run pytest -q Open-Teach/tests
 ```
 
-前端检查：
+Frontend checks:
 
 ```bash
 npm test --prefix inspire_visualizer/web -- --run
@@ -414,26 +446,31 @@ npm run typecheck --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
 ```
 
-独立前端开发服务器：
+Standalone frontend development server:
 
 ```bash
 npm run dev --prefix inspire_visualizer/web
 ```
 
-不要在同一台灵巧手上同时运行多个真机控制后端。前端开发可以连接统一后端，但 Modbus 写入
-仍应只由一个控制器拥有。
+Never run multiple live-control backends against the same hand. Frontend development may connect to
+the unified backend, but only one controller may own Modbus writes.
 
-## 团队协作约定
+## Team workflow
 
-1. 从短生命周期 feature branch 开发，通过 PR 合并。
-2. 不直接修改 `inspire_doc/` 中的厂家原始文件；衍生结论写到项目文档或代码中。
-3. 不提交 `.env`、`hands.json`、个人标定、数据集、日志、截图中的地址或本机绝对路径。
-4. 算法改动应附自动化测试和 dry-run 手势矩阵结果。
-5. Modbus、速度、力或 pose 改动应在 PR 中记录真机型号、验证步骤和安全边界，不记录设备 IP。
-6. 修改第三方目录时保留原许可证，并同步更新 [THIRD_PARTY.md](THIRD_PARTY.md)。
-7. 提交前运行 `git status --ignored`，确认本地配置和数据处于 ignored 状态。
+1. Develop on short-lived feature branches and merge through pull requests.
+2. Do not modify manufacturer originals under `inspire_doc/`; put derived conclusions in project
+   documentation or code.
+3. Do not commit `.env`, `hands.json`, personal calibration, datasets, logs, screenshot addresses,
+   or absolute local paths.
+4. Include automated tests and a dry-run gesture matrix with algorithm changes.
+5. For Modbus, speed, force, or pose changes, document the hand model, validation procedure, and
+   safety boundaries in the PR, but never the device IP.
+6. Preserve upstream licenses when modifying third-party directories and update
+   [THIRD_PARTY.md](THIRD_PARTY.md).
+7. Run `git status --ignored` before committing and verify that local configuration and data remain
+   ignored.
 
-建议 PR 描述包含：
+Suggested pull-request template:
 
 ```text
 Summary:
@@ -444,38 +481,39 @@ Physical verification (if any):
 Rollback:
 ```
 
-## 常见问题
+## Troubleshooting
 
-### Viewer 启动但没有相机画面
+### Viewer starts without a camera image
 
-- 确认 D435 使用 USB 3.x，并能被系统识别。
-- 使用 AVFoundation 枚举视频端点，确认 D435 名称包含 `RGB Module RGB`。
-- 确认 `.env` 使用 `D435_CAMERA_SOURCE=avfoundation` 和当前正确的摄像头索引。
-- 在系统设置的“隐私与安全性 → 摄像头”中允许当前终端访问摄像头。
-- `D435_CAMERA_ROTATION=90/180/270` 可按顺时针方向修正物理安装角度。
-- AVFoundation 数字索引可能在手机连续互通相机或其他 webcam 接入后重新排序，不要永久
-  假定 `0` 一定对应 D435。
-- `RS2_USB_STATUS_ACCESS` 属于 librealsense 原始 USB 接口权限，与 AVFoundation 摄像头权限
-  不同；当前 macOS 策略不依赖该接口。
+- Confirm that the D435 uses USB 3.x and is visible to the operating system.
+- Enumerate AVFoundation endpoints and select one containing `RGB Module RGB`.
+- Confirm `D435_CAMERA_SOURCE=avfoundation` and the current camera index in `.env`.
+- Allow the terminal under System Settings > Privacy & Security > Camera.
+- Use `D435_CAMERA_ROTATION=90`, `180`, or `270` for clockwise installation correction.
+- AVFoundation indexes can change when Continuity Camera or another webcam is connected.
+- `RS2_USB_STATUS_ACCESS` concerns raw librealsense USB access, not AVFoundation camera permission;
+  the default macOS path does not depend on it.
 
-### `DISCONNECTED` 或 Modbus 超时
+### `DISCONNECTED` or Modbus timeout
 
-- 检查 `.env` 与 `hands.json` 是否指向同一台设备。
-- 运行 `ping` 和 `nc -vz`；检查网卡静态地址、子网掩码和防火墙。
-- 确认没有 Viewer、Open-Teach 或 pose script 正在占用同一设备。
+- Confirm that `.env` and `hands.json` refer to the same device.
+- Run `ping` and `nc -vz`; inspect the static address, subnet mask, and firewall.
+- Confirm that no Viewer, Open-Teach process, or pose script already owns the same device.
 
-### Open-Teach 有手部画面但电脑收不到关键点
+### Quest shows hands but the workstation receives no keypoints
 
-- Quest 中填写的是 `OPENTEACH_HOST`，不是灵巧手 IP。
-- Quest 与该工作站接口必须互通；检查 `8087` 和防火墙。
-- 先运行 `./scripts/run_openteach.sh` dry-run，再判断是否为真机链路问题。
+- The Quest must use `OPENTEACH_HOST`, not the dexterous-hand IP.
+- Confirm network reachability to the selected workstation interface and check port `8087`.
+- Start `./scripts/run_openteach.sh` in dry-run before debugging the hardware path.
 
-### 数据采集一直显示 `Waiting for data`
+### Data collection remains at `Waiting for data`
 
-日志会分别显示 `tracking`、`robot`、`tactile`。三者必须全部为 `ok` 才开始写 episode；确认
-右手在画面中、设备在线，并在 `hands.json` 中启用 `piezoresistive_v1`。
+The log reports `tracking`, `robot`, and `tactile` separately. All three must be `ok` before writing
+an episode. Keep the right hand visible, confirm that the device is online, and enable
+`piezoresistive_v1` in `hands.json`.
 
-### tracking 短暂丢失
+### Brief tracking loss
 
-真机控制进入 `RECOVERY HOLD` 并等待恢复；数据采集继续写无效 tracking 帧。若机械动作异常，
-不要等待软件恢复，直接 E-STOP 或物理断电。
+Live control enters `RECOVERY HOLD` and waits for tracking to return. Data collection continues with
+invalid tracking frames. Do not wait for software recovery after abnormal mechanical motion; use
+E-STOP or remove physical power immediately.
