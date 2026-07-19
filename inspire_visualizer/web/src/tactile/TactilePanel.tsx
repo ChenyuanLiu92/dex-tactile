@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { HandSide, HandSnapshot, TactileFrame } from '../app/types'
 import { appendHistory, summarizeFrame, type TactileHistorySample } from './history'
-import type { HeatStyle, TactileSelection } from './TactileOverlay'
+import type { HeatStyle, TactileSelection } from './displayTypes'
 import { regionKey, useI18n } from '../i18n/I18nProvider'
 
 function HistoryPlot({ history, regionId }: { history: TactileHistorySample[]; regionId: string }) {

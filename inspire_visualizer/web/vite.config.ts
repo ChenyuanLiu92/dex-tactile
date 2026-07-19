@@ -7,6 +7,9 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     proxy: {
+      '/api/control-owner': {
+        target: 'http://127.0.0.1:8787',
+      },
       '/vision': {
         target: 'http://127.0.0.1:8787',
         ws: true,

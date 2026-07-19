@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Sequence
+from typing import Protocol
 
 import numpy as np
 from pymodbus.client.sync import ModbusTcpClient
@@ -11,13 +12,32 @@ ANGLE_SET = 1486
 FORCE_SET = 1498
 SPEED_SET = 1522
 ANGLE_ACT = 1546
-DEFAULT_FORCE = np.array([220, 120, 120, 120, 220, 220], dtype=int)
+DEFAULT_FORCE = np.array([220, 120, 120, 120, 220, 500], dtype=int)
 HOLD_SPEED = np.full(6, 100, dtype=int)
 DEFAULT_HOST = "192.0.2.10"
 DEFAULT_PORT = 6000
+ChannelValues = Sequence[float] | np.ndarray
 
 
-def _channels(values: Sequence[float], name: str) -> np.ndarray:
+class ModbusResponse(Protocol):
+    registers: Sequence[int]
+
+    def isError(self) -> bool: ...
+
+
+class ModbusClient(Protocol):
+    def connect(self) -> bool: ...
+
+    def close(self) -> None: ...
+
+    def read_holding_registers(self, address: int, count: int) -> ModbusResponse: ...
+
+    def write_registers(
+        self, address: int, values: Sequence[int]
+    ) -> ModbusResponse: ...
+
+
+def _channels(values: ChannelValues, name: str) -> np.ndarray:
     array = np.asarray(values, dtype=float).reshape(-1)
     if len(array) != 6 or not np.all(np.isfinite(array)):
         raise ValueError(f"{name} must contain six finite values")
@@ -32,8 +52,8 @@ class RH56Driver:
         host: str | None = None,
         port: int | None = None,
         timeout: float = 0.5,
-        force: Sequence[int] = DEFAULT_FORCE,
-        client_factory: Callable[..., object] | None = None,
+        force: ChannelValues = DEFAULT_FORCE,
+        client_factory: Callable[..., ModbusClient] | None = None,
     ):
         self.host = host or os.environ.get("RH56_HOST", DEFAULT_HOST)
         self.port = int(port if port is not None else os.environ.get("RH56_PORT", DEFAULT_PORT))
@@ -41,7 +61,8 @@ class RH56Driver:
         self._client_factory = client_factory or (
             lambda host, port: ModbusTcpClient(host, port=port, timeout=timeout)
         )
-        self._client = None
+        self._client: ModbusClient | None = None
+        self._written_position: np.ndarray | None = None
         self._written_speed: np.ndarray | None = None
         self._written_force: np.ndarray | None = None
 
@@ -58,6 +79,7 @@ class RH56Driver:
                 f"Unable to connect to RH56 at {self.host}:{self.port}"
             )
         self._client = client
+        self._written_position = None
         self._written_speed = None
         self._written_force = None
 
@@ -69,7 +91,7 @@ class RH56Driver:
             raise RuntimeError("Invalid ANGLE_ACT response from RH56")
         return _channels(registers, "actual positions")
 
-    def write_motion(self, positions: Sequence[float], speeds: Sequence[float]) -> None:
+    def write_motion(self, positions: ChannelValues, speeds: ChannelValues) -> None:
         position_values = _channels(positions, "positions")
         speed_values = _channels(speeds, "speeds")
         if self._written_speed is None or not np.array_equal(
@@ -82,7 +104,11 @@ class RH56Driver:
         ):
             self._write(FORCE_SET, self.force)
             self._written_force = self.force.copy()
-        self._write(ANGLE_SET, position_values)
+        if self._written_position is None or not np.array_equal(
+            position_values, self._written_position
+        ):
+            self._write(ANGLE_SET, position_values)
+            self._written_position = position_values.copy()
 
     def hold_current(self) -> np.ndarray:
         positions = self.read_positions()
@@ -93,6 +119,7 @@ class RH56Driver:
         if self._client is not None:
             self._client.close()
             self._client = None
+        self._written_position = None
         self._written_speed = None
         self._written_force = None
 
@@ -101,7 +128,7 @@ class RH56Driver:
         if response.isError():
             raise RuntimeError(f"RH56 Modbus write failed at register {address}")
 
-    def _require_client(self):
+    def _require_client(self) -> ModbusClient:
         if self._client is None:
             raise ConnectionError("RH56 is not connected")
         return self._client

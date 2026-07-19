@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from pathlib import Path
+from time import monotonic, sleep
 
 from fastapi.testclient import TestClient
 
@@ -51,6 +52,15 @@ def make_app(config_path: Path, *, allow_control: bool = True):
         start_background=False,
         allow_control=allow_control,
     )
+
+
+def wait_until(predicate, timeout: float = 1.0) -> bool:
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        if predicate():
+            return True
+        sleep(0.005)
+    return bool(predicate())
 
 
 def test_config_and_discovery_endpoints_report_the_online_left_hand(tmp_path: Path) -> None:
@@ -116,7 +126,9 @@ def test_websocket_requires_arming_and_disarms_when_session_closes(tmp_path: Pat
             assert result["accepted"] is True
             assert result["actual_angles"] == [900] * 6
 
-        assert app.state.manager.snapshots()["left"].armed is False
+        assert wait_until(
+            lambda: app.state.manager.snapshots()["left"].armed is False
+        )
 
 
 def test_unified_read_only_mode_rejects_device_arm(tmp_path: Path) -> None:
@@ -154,7 +166,9 @@ def test_tactile_calibration_endpoint_round_trips_for_configured_device(tmp_path
     app = make_app(tmp_path / "hands.json")
     with TestClient(app) as client:
         client.put("/api/config", json={"left": {"enabled": True, "host": "192.0.2.11", "port": 6000, "tactile_profile": "piezoresistive_v1"}, "right": {"enabled": False, "host": "192.0.2.10", "port": 6000}})
-        assert client.get("/api/tactile-calibration/left").json() is None
+        empty = client.get("/api/tactile-calibration/left")
+        assert empty.json() is None
+        assert empty.headers["cache-control"] == "private, max-age=2"
         payload = {
             "side": "left",
             "host": "192.0.2.11",
@@ -167,6 +181,7 @@ def test_tactile_calibration_endpoint_round_trips_for_configured_device(tmp_path
         loaded = client.get("/api/tactile-calibration/left")
     assert saved.status_code == 200
     assert loaded.json() == {**payload, "version": 1, "model": "RH56DFTP", "drafts": {}}
+    assert loaded.headers["cache-control"] == "private, max-age=2"
 
 
 def test_tactile_frame_payload_preserves_region_shape_and_metrics() -> None:

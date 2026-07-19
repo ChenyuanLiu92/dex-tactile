@@ -49,6 +49,34 @@ export interface DetectedHandSnapshot {
   landmarks_2d: number[][]
 }
 
+export interface OperatorProfileSummary {
+  id: string
+  name: string
+  calibration_state: 'DEFAULT' | 'UNCALIBRATED' | 'CALIBRATED'
+  active: boolean
+  updated_at: string | null
+}
+
+export interface ProfileListResponse {
+  active_profile_id: string
+  profiles: OperatorProfileSummary[]
+}
+
+export type CalibrationPose = 'open' | 'relaxed' | 'fist' | 'thumb_opposition' | 'ok'
+
+export interface ProfileCalibrationStatus {
+  state: 'COLLECTING' | 'FAILED' | 'COMPLETE' | 'CANCELED'
+  profile_id: string
+  pose: CalibrationPose | null
+  pose_index: number
+  total_poses: number
+  accepted_samples: number
+  required_samples: number
+  stability: number | null
+  error: string | null
+  failed_pose: CalibrationPose | null
+}
+
 export interface TrackingSnapshot {
   type: 'tracking'
   status: TrackingStatus
@@ -70,6 +98,8 @@ export interface TrackingSnapshot {
   dry_run: boolean
   modbus_output: boolean
   control: ControlSnapshot
+  operator_profile: OperatorProfileSummary
+  retargeting_calibration: ProfileCalibrationStatus | null
 }
 
 export const EMPTY_CONTROL: ControlSnapshot = {
@@ -111,6 +141,60 @@ export const EMPTY_SNAPSHOT: TrackingSnapshot = {
   dry_run: true,
   modbus_output: false,
   control: EMPTY_CONTROL,
+  operator_profile: {
+    id: 'default', name: 'Default', calibration_state: 'DEFAULT', active: true, updated_at: null,
+  },
+  retargeting_calibration: null,
+}
+
+const TRACKING_STATUSES = new Set<TrackingStatus>([
+  'STARTING', 'SEARCHING', 'WRONG_HAND', 'TRACKING', 'LOST', 'CAMERA_ERROR',
+])
+const CONTROL_STATES = new Set<ControlState>([
+  'DISCONNECTED', 'DISARMED', 'ARMING', 'ARMED', 'POSITIONING', 'HOLDING',
+  'ESTOPPED', 'FAULT',
+])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function normalizeTrackingSnapshot(
+  payload: unknown,
+  previous: TrackingSnapshot = EMPTY_SNAPSHOT,
+): TrackingSnapshot | null {
+  if (!isRecord(payload) || payload.type !== 'tracking') return null
+
+  const candidate = payload as Partial<TrackingSnapshot>
+  const control: Record<string, unknown> = isRecord(candidate.control) ? candidate.control : {}
+  const profile: Record<string, unknown> = isRecord(candidate.operator_profile)
+    ? candidate.operator_profile
+    : {}
+  const status = TRACKING_STATUSES.has(candidate.status as TrackingStatus)
+    ? candidate.status as TrackingStatus
+    : previous.status
+  const controlState = CONTROL_STATES.has(control['state'] as ControlState)
+    ? control['state'] as ControlState
+    : previous.control.state
+
+  return {
+    ...previous,
+    ...candidate,
+    type: 'tracking',
+    status,
+    detected_hands: Array.isArray(candidate.detected_hands)
+      ? candidate.detected_hands
+      : previous.detected_hands,
+    control: {
+      ...previous.control,
+      ...control,
+      state: controlState,
+    } as ControlSnapshot,
+    operator_profile: {
+      ...previous.operator_profile,
+      ...profile,
+    } as OperatorProfileSummary,
+  }
 }
 
 export type ControlAction = 'arm' | 'disarm' | 'estop' | 'reset' | 'reconnect'
@@ -123,6 +207,48 @@ export async function requestControl(action: ControlAction): Promise<ControlSnap
   const payload = await response.json()
   if (!response.ok) throw new Error(payload.detail || `Control request failed (${response.status})`)
   return payload as ControlSnapshot
+}
+
+async function profileRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/vision/api/retargeting/profiles${path}`, init)
+  const payload = await response.json()
+  if (!response.ok) throw new Error(payload.detail || `Profile request failed (${response.status})`)
+  return payload as T
+}
+
+const confirmedJson = (method: string, body?: unknown): RequestInit => ({
+  method,
+  headers: {
+    'X-RH56-Control': 'operator-confirmed',
+    ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+  },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+})
+
+export interface ProfileApi {
+  list: () => Promise<ProfileListResponse>
+  create: (name: string) => Promise<OperatorProfileSummary>
+  rename: (id: string, name: string) => Promise<OperatorProfileSummary>
+  remove: (id: string) => Promise<ProfileListResponse>
+  activate: (id: string) => Promise<OperatorProfileSummary>
+  startCalibration: (id: string) => Promise<ProfileCalibrationStatus>
+  retryCalibration: (id: string) => Promise<ProfileCalibrationStatus>
+  cancelCalibration: (id: string) => Promise<ProfileCalibrationStatus>
+  exportProfile: (id: string) => Promise<Record<string, unknown>>
+  importProfile: (document: Record<string, unknown>) => Promise<OperatorProfileSummary>
+}
+
+export const operatorProfileApi: ProfileApi = {
+  list: () => profileRequest<ProfileListResponse>(''),
+  create: (name) => profileRequest('', confirmedJson('POST', { name })),
+  rename: (id, name) => profileRequest(`/${id}`, confirmedJson('PATCH', { name })),
+  remove: (id) => profileRequest(`/${id}`, confirmedJson('DELETE')),
+  activate: (id) => profileRequest(`/${id}/activate`, confirmedJson('PUT')),
+  startCalibration: (id) => profileRequest(`/${id}/calibration/start`, confirmedJson('POST')),
+  retryCalibration: (id) => profileRequest(`/${id}/calibration/retry`, confirmedJson('POST')),
+  cancelCalibration: (id) => profileRequest(`/${id}/calibration/cancel`, confirmedJson('POST')),
+  exportProfile: (id) => profileRequest(`/${id}/export`),
+  importProfile: (document) => profileRequest('/import', confirmedJson('POST', document)),
 }
 
 function websocketUrl() {
@@ -143,7 +269,9 @@ export function useTrackingSnapshot(enabled = true, initial = EMPTY_SNAPSHOT) {
       socket = new WebSocket(websocketUrl())
       socket.onmessage = (event) => {
         try {
-          setSnapshot(JSON.parse(event.data) as TrackingSnapshot)
+          setSnapshot((current) => (
+            normalizeTrackingSnapshot(JSON.parse(event.data), current) ?? current
+          ))
         } catch {
           // Ignore malformed telemetry and retain the last coherent snapshot.
         }

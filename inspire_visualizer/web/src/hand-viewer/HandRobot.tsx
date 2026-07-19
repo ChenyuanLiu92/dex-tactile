@@ -3,20 +3,10 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Box3, LoadingManager, Mesh, Vector3 } from 'three'
 import URDFLoader, { type URDFRobot } from 'urdf-loader'
 
-import type { ChannelValues, HandSide, TactileFrame } from '../app/types'
-import { showsTactile, showsTargetPose, type WorkspaceMode } from '../app/workspaceMode'
-import type { TactileBaseline } from '../tactile/calibration'
-import type { TactileCalibrationDocument } from '../tactile/calibrationApi'
-import {
-  TactileOverlay,
-  type HeatStyle,
-  type TactileSelection,
-} from '../tactile/TactileOverlay'
+import type { ChannelValues, HandSide } from '../app/types'
+import { showsTargetPose, type WorkspaceMode } from '../app/workspaceMode'
 import { CoordinateFrame } from './CoordinateFrame'
 import { ACTUATOR_REFERENCES, mapDeviceAngles } from './jointMapping'
-import { tintUrdfVisuals } from './robotAppearance'
-import { CalibrationGroundingOverlay, type GroundingFocus } from '../tactile/CalibrationGroundingOverlay'
-import type { CalibrationPoint } from '../tactile/spatialCalibration'
 
 const MODEL_CONFIG = {
   left: {
@@ -151,20 +141,10 @@ interface HandRobotProps {
   actual: ChannelValues
   target: ChannelValues
   mode: WorkspaceMode
-  tactileFrame: TactileFrame | null
-  tactileBaseline: TactileBaseline | undefined
-  heatStyle: HeatStyle
-  tactileThreshold: number
-  tactileScale: number
-  tactileDegraded: boolean
-  tactileSelection: TactileSelection | null
-  onTactileSelect: (selection: TactileSelection) => void
   positionX: number
   showBaseFrame: boolean
   showActuatorFrames: boolean
   onError: (message: string) => void
-  tactileCalibration?: TactileCalibrationDocument | null
-  calibrationGuide?: { regionId: string; point: CalibrationPoint; completedPoints: CalibrationPoint[]; progress: number; wrongRegionId: string | null; onFocus: (focus: GroundingFocus) => void }
 }
 
 export function HandRobot({
@@ -172,20 +152,10 @@ export function HandRobot({
   actual,
   target,
   mode,
-  tactileFrame,
-  tactileBaseline,
-  heatStyle,
-  tactileThreshold,
-  tactileScale,
-  tactileDegraded,
-  tactileSelection,
-  onTactileSelect,
   positionX,
   showBaseFrame,
   showActuatorFrames,
   onError,
-  tactileCalibration,
-  calibrationGuide,
 }: HandRobotProps) {
   const { robot, error } = useRobot(side)
   const ghost = useMemo(() => {
@@ -195,11 +165,6 @@ export function HandRobot({
     return clone
   }, [robot])
   const targetDiffers = target.some((value, index) => Math.abs(value - actual[index]) > 2)
-
-  useEffect(() => {
-    if (!robot || !showsTactile(mode)) return
-    return tintUrdfVisuals(robot, '#50595c')
-  }, [mode, robot])
 
   useEffect(() => {
     if (error) onError(error)
@@ -219,22 +184,6 @@ export function HandRobot({
     <group position={[positionX, 0, 0]}>
       <primitive object={robot} />
       {showsTargetPose(mode) && ghost && targetDiffers ? <primitive object={ghost} /> : null}
-      {showsTactile(mode) && tactileFrame ? (
-        <TactileOverlay
-          side={side}
-          robot={robot}
-          frame={tactileFrame}
-          baseline={tactileBaseline}
-          threshold={tactileThreshold}
-          scale={tactileScale}
-          style={heatStyle}
-          degraded={tactileDegraded}
-          selected={tactileSelection}
-          onSelect={onTactileSelect}
-          calibration={tactileCalibration}
-        />
-      ) : null}
-      {calibrationGuide ? <CalibrationGroundingOverlay robot={robot} side={side} {...calibrationGuide} /> : null}
       {showBaseFrame && robot.links.base_link
         ? createPortal(
             <CoordinateFrame

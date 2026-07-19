@@ -76,8 +76,32 @@ def test_arm_seeds_from_measured_position_then_slews_on_tick():
 
     assert armed.state is ControlState.ARMED
     assert armed.commanded == [900, 800, 700, 600, 500, 400]
-    assert driver.writes[-1][0] == [780, 680, 580, 480, 380, 160]
-    assert driver.writes[-1][1] == [450, 450, 450, 450, 450, 900]
+    assert driver.writes[-1][0] == [780, 680, 580, 480, 320, 160]
+    assert driver.writes[-1][1] == [450, 450, 450, 450, 675, 900]
+
+
+def test_slew_advances_from_last_command_when_measured_motion_lags():
+    controller, driver = make_controller()
+    controller.start()
+    controller.update_tracking(tracked())
+    controller.arm(now=100.01)
+
+    measured = driver.positions.copy()
+    controller.tick(now=100.02)
+    first_command = driver.writes[-1][0]
+    driver.positions = measured
+    controller.tick(now=100.03)
+    second_command = driver.writes[-1][0]
+    driver.positions = measured
+    controller.tick(now=100.04)
+    third_command = driver.writes[-1][0]
+
+    assert first_command == [780, 680, 580, 480, 320, 160]
+    assert second_command == [660, 560, 460, 360, 140, 0]
+    assert third_command == [540, 440, 340, 240, 0, 0]
+    assert driver.writes[-1][1] == [450, 450, 450, 450, 675, 900]
+    assert controller.snapshot().actual == measured.tolist()
+    assert controller.snapshot().commanded == third_command
 
 
 def test_stale_tracking_holds_once_during_recovery_grace():
@@ -117,7 +141,8 @@ def test_tracking_recovers_within_grace_without_rearming():
     assert resumed != measured
     for index, (current, command) in enumerate(zip(measured, resumed)):
         assert min(current, 700) <= command <= max(current, 700)
-        assert abs(command - current) <= (240 if index == 5 else 120)
+        maximum_step = 240 if index == 5 else 180 if index == 4 else 120
+        assert abs(command - current) <= maximum_step
 
 
 def test_sustained_tracking_loss_remains_armed_and_holds_once():

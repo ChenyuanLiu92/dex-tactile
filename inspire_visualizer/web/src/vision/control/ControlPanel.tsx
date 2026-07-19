@@ -9,17 +9,19 @@ import { CONTROL_STATE_KEYS } from '../statusLabels'
 export function ControlPanel({
   control,
   trackingStatus,
+  controlEnabled = true,
   request = requestControl,
 }: {
   control: ControlSnapshot
   trackingStatus: TrackingStatus
+  controlEnabled?: boolean
   request?: (action: ControlAction) => Promise<ControlSnapshot>
 }) {
   const { t } = useI18n()
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const armAllowed = control.connected && trackingStatus === 'TRACKING'
+  const armAllowed = controlEnabled && control.connected && trackingStatus === 'TRACKING'
   const stateLabel = t(control.tracking_hold ? 'control.recoveryHold' : CONTROL_STATE_KEYS[control.state])
 
   const invoke = async (action: ControlAction) => {

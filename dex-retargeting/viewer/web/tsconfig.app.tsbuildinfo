@@ -1,1 +1,0 @@
-{"root":["./src/app.test.tsx","./src/app.tsx","./src/api.ts","./src/main.tsx","./src/test-setup.ts","./src/camera/camerapanel.test.ts","./src/camera/camerapanel.tsx","./src/control/controlpanel.test.tsx","./src/control/controlpanel.tsx","./src/scene/robotscene.tsx","./src/telemetry/telemetrypanel.tsx"],"version":"5.7.3"}

@@ -1,1 +1,1 @@
-"""Standalone D435 vision viewer."""
+"""D435 vision retargeting service."""

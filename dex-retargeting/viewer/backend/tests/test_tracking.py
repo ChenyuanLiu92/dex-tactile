@@ -1,8 +1,12 @@
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from viewer.backend.runtime import ViewerRuntime
+from viewer.backend.control.controller import ControlState, TransitionError
+from viewer.backend.operator_profiles import OperatorProfileStore
 from viewer.backend.state import TrackingStatus
 from viewer.backend.tracking import RightHandTracker, estimate_hand_frame
 
@@ -72,7 +76,7 @@ class FakeRetargeter:
     def __init__(self):
         self.reset_count = 0
 
-    def retarget(self, _landmarks):
+    def retarget(self, _landmarks, confidence=None):
         return {"index_proximal_joint": 0.25}, [1, 2, 3, 4, 5, 6]
 
     def get_contact_status(self):
@@ -93,6 +97,32 @@ class FakeController:
 
     def update_tracking(self, snapshot):
         self.tracking.append(snapshot)
+
+
+class ProfileController(FakeController):
+    def __init__(self, state=ControlState.DISARMED):
+        super().__init__()
+        self.state = state
+
+    def snapshot(self):
+        return SimpleNamespace(state=self.state)
+
+
+class ProfileRetargeter(FakeRetargeter):
+    def __init__(self):
+        super().__init__()
+        self.profiles = []
+        self.calibration_status = None
+
+    def set_operator_profile(self, profile):
+        self.profiles.append(profile)
+
+    def get_operator_profile(self):
+        profile = self.profiles[-1]
+        return {"id": profile["id"], "name": profile["name"], "calibration_state": "UNCALIBRATED"}
+
+    def get_profile_calibration_status(self):
+        return self.calibration_status
 
 
 def test_tracker_accepts_right_and_rejects_left_on_mirrored_input():
@@ -134,11 +164,69 @@ def test_hand_frame_is_orthonormal():
     np.testing.assert_allclose(frame.T @ frame, np.eye(3), atol=1e-6)
 
 
+def test_runtime_profile_changes_are_disarmed_only_and_apply_immediately(tmp_path):
+    controller = ProfileController()
+    retargeter = ProfileRetargeter()
+    store = OperatorProfileStore(tmp_path / "operator-profiles.json")
+    runtime = ViewerRuntime(
+        retargeter=retargeter,
+        tracker=object(),
+        controller=controller,
+        profile_store=store,
+        start_workers=False,
+    )
+
+    created = runtime.create_operator_profile("Operator A")
+    runtime.activate_operator_profile(created["id"])
+
+    assert store.list_payload()["active_profile_id"] == created["id"]
+    assert retargeter.profiles[-1]["id"] == created["id"]
+
+    controller.state = ControlState.ARMED
+    with pytest.raises(TransitionError, match="DISARMED"):
+        runtime.create_operator_profile("Blocked")
+
+
+def test_runtime_blocks_switching_or_deleting_active_calibration_profile(tmp_path):
+    controller = ProfileController()
+    retargeter = ProfileRetargeter()
+    store = OperatorProfileStore(tmp_path / "operator-profiles.json")
+    runtime = ViewerRuntime(
+        retargeter=retargeter,
+        tracker=object(),
+        controller=controller,
+        profile_store=store,
+        start_workers=False,
+    )
+    calibrating = runtime.create_operator_profile("Calibrating")
+    other = runtime.create_operator_profile("Other")
+    runtime.activate_operator_profile(calibrating["id"])
+    retargeter.calibration_status = {
+        "state": "COLLECTING",
+        "profile_id": calibrating["id"],
+    }
+
+    with pytest.raises(TransitionError, match="calibration is active"):
+        runtime.activate_operator_profile(other["id"])
+    with pytest.raises(TransitionError, match="calibration is active"):
+        runtime.delete_operator_profile(calibrating["id"])
+
+    retargeter.calibration_status = {
+        "state": "CANCELED",
+        "profile_id": calibrating["id"],
+    }
+    runtime.activate_operator_profile(other["id"])
+    runtime.delete_operator_profile(calibrating["id"])
+
+
 def test_runtime_changes_missing_hand_to_lost_after_tracking():
     controller = FakeController()
     retargeter = FakeRetargeter()
     runtime = ViewerRuntime(
-        retargeter=retargeter, controller=controller, start_workers=False
+        retargeter=retargeter,
+        tracker=object(),
+        controller=controller,
+        start_workers=False,
     )
     tracked = runtime.apply_detection(
         sequence=1,

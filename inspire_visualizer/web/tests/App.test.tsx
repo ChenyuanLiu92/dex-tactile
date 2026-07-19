@@ -109,6 +109,53 @@ describe('App device-dependent layout', () => {
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
   })
 
+  it('loads tactile calibration once when online status is unchanged', async () => {
+    mockedHands.right = online('right')
+    const fetchMock = vi.fn(async () => new Response('null', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    mockedHands = {
+      left: { ...mockedHands.left },
+      right: { ...mockedHands.right, updated_at: 2 },
+    }
+    rerender(<App />)
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not reload tactile calibration during a device reconnect flap', async () => {
+    mockedHands.right = online('right')
+    const fetchMock = vi.fn(async () => new Response('null', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    mockedHands = {
+      left: { ...mockedHands.left },
+      right: { ...initialHands.right },
+    }
+    rerender(<App />)
+    mockedHands = {
+      left: { ...mockedHands.left },
+      right: online('right'),
+    }
+    rerender(<App />)
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
   it('exposes a resizable device inspector on desktop', () => {
     mockedHands.left = online('left')
     renderApp()

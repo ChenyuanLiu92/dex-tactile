@@ -1,4 +1,5 @@
 import pickle
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +9,7 @@ from dex_retargeting.constants import OPERATOR2MANO_RIGHT
 from viewer.backend.retargeting import (
     ContactLatch,
     InspireVisionRetargeter,
+    ProfileCalibrationSession,
     SEGMENT_CONSTRAINTS,
     build_constraint_targets,
     map_joints_to_actuators,
@@ -15,6 +17,7 @@ from viewer.backend.retargeting import (
 )
 from viewer.backend.state import TrackingSnapshot, TrackingStatus
 from viewer.backend.tracking import estimate_hand_frame
+from viewer.tools.retargeting_diagnostics import curl_finger
 
 
 LIMITS = {
@@ -142,6 +145,13 @@ def _mcp_only_curl(finger: str, bend: float = 1.1) -> np.ndarray:
     points[pip] = origin + lengths[0] * curled_direction
     points[dip] = points[pip] + lengths[1] * curled_direction
     points[tip] = points[dip] + lengths[2] * curled_direction
+    return points
+
+
+def _all_fingers_curl(bend: float) -> np.ndarray:
+    points = _canonical_pose()
+    for finger in FINGER_LANDMARKS:
+        points = curl_finger(points, finger, bend=bend)
     return points
 
 
@@ -448,3 +458,97 @@ def test_non_tracking_snapshot_never_serializes_targets():
     assert payload["joints"] is None
     assert payload["actuators"] is None
     assert payload["contact"] is None
+
+
+def test_profile_calibration_auto_captures_five_stable_poses():
+    session = ProfileCalibrationSession("profile-1", required_samples=3, window_size=2)
+    opposed = _canonical_pose("index")
+    opposed[4, 0] += 0.1
+    poses = {
+        "open": _canonical_pose(),
+        "relaxed": _all_fingers_curl(0.35),
+        "fist": _all_fingers_curl(1.15),
+        "thumb_opposition": opposed,
+        "ok": _canonical_pose("index"),
+    }
+
+    for pose in session.poses:
+        for _ in range(4):
+            session.observe(poses[pose], confidence=0.95)
+
+    status = session.status()
+    calibration = session.completed_calibration()
+    assert status["state"] == "COMPLETE"
+    assert status["pose_index"] == 5
+    assert calibration["mode"] == "five_pose"
+    assert set(calibration["poses"]) == set(session.poses)
+    assert calibration["contact_enter_ratio"] < calibration["contact_release_ratio"]
+
+
+def test_profile_calibration_rejects_low_confidence_and_unstable_frames():
+    session = ProfileCalibrationSession("profile-1", required_samples=3, window_size=2)
+    pose = _canonical_pose()
+
+    for _ in range(5):
+        session.observe(pose, confidence=0.5)
+    assert session.status()["accepted_samples"] == 0
+
+    session.observe(pose, confidence=0.95)
+    session.observe(pose + np.linspace(0, 0.05, 63).reshape(21, 3), confidence=0.95)
+    assert session.status()["accepted_samples"] == 0
+
+
+def test_switching_profile_resets_temporal_context_without_moving_pose():
+    retargeter = InspireVisionRetargeter()
+    retargeter.retarget(_canonical_pose("index"))
+    previous_pose = retargeter._last_independent.copy()
+
+    retargeter.set_operator_profile(
+        {
+            "id": "operator-a",
+            "name": "Operator A",
+            "calibration": None,
+        }
+    )
+
+    np.testing.assert_allclose(retargeter._last_independent, previous_pose)
+    assert retargeter.get_contact_status()["state"] == "NONE"
+    assert retargeter.get_operator_profile()["id"] == "operator-a"
+
+
+def test_profile_switch_waits_for_in_flight_retarget_frame(monkeypatch):
+    retargeter = InspireVisionRetargeter()
+    entered = threading.Event()
+    release = threading.Event()
+    switched = threading.Event()
+    original_filter = retargeter._filter_landmarks
+
+    def blocking_filter(landmarks):
+        entered.set()
+        assert release.wait(timeout=2.0)
+        return original_filter(landmarks)
+
+    monkeypatch.setattr(retargeter, "_filter_landmarks", blocking_filter)
+    retarget_thread = threading.Thread(target=retargeter.retarget, args=(_canonical_pose(),))
+    switch_thread = threading.Thread(
+        target=lambda: (
+            retargeter.set_operator_profile(
+                {"id": "operator-b", "name": "Operator B", "calibration": None}
+            ),
+            switched.set(),
+        )
+    )
+
+    retarget_thread.start()
+    assert entered.wait(timeout=2.0)
+    switch_thread.start()
+    try:
+        assert not switched.wait(timeout=0.1)
+    finally:
+        release.set()
+        retarget_thread.join(timeout=3.0)
+        switch_thread.join(timeout=3.0)
+
+    assert not retarget_thread.is_alive()
+    assert not switch_thread.is_alive()
+    assert switched.is_set()

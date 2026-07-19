@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import type { HandSide, TactileFrame, TactileProfile, TactileRegionFrame } from '../app/types'
 import { regionKey, useI18n } from '../i18n/I18nProvider'
 import type { TactileBaseline } from './calibration'
+import type { TactileCalibrationDocument } from './calibrationApi'
 import { heatColor, normalizedTactileValue } from './color'
+import type { HeatStyle, TactileSelection } from './displayTypes'
 import { tactilePatches, type TactilePatchLayout } from './layout'
-import type { CalibrationPoint } from './spatialCalibration'
-import type { HeatStyle, TactileSelection } from './TactileOverlay'
+import { applyBilinearTransform, type BilinearTransform, type CalibrationPoint } from './spatialCalibration'
 
 export type TactileAtlasView = 'heatmap' | 'surface'
 
@@ -38,6 +39,7 @@ interface Props {
   onSelect?: (selection: TactileSelection) => void
   guide?: CalibrationGuide
   compact?: boolean
+  calibration?: TactileCalibrationDocument | null
 }
 
 const GROUP_IDS = ['little', 'ring', 'middle', 'index', 'thumb', 'palm'] as const
@@ -66,6 +68,53 @@ export function taxelAtPoint(
   return { row, column }
 }
 
+export interface PositionedTaxel {
+  row: number
+  column: number
+  u: number
+  v: number
+}
+
+function localCoordinate(value: number, range: [number, number]): number {
+  const span = range[1] - range[0]
+  if (Math.abs(span) < 1e-8) return 0.5
+  return Math.min(1, Math.max(0, (value - range[0]) / span))
+}
+
+export function positionedTaxels(
+  rows: number,
+  columns: number,
+  patch: TactilePatchLayout,
+  transform?: BilinearTransform,
+): PositionedTaxel[] {
+  const result: PositionedTaxel[] = []
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      if (transform) {
+        const [u, v] = applyBilinearTransform(transform, row, column, rows, columns)
+        result.push({
+          row,
+          column,
+          u: localCoordinate(u, patch.surface.uRange),
+          v: localCoordinate(v, patch.surface.vRange),
+        })
+      } else {
+        result.push({ row, column, u: (column + 0.5) / columns, v: (row + 0.5) / rows })
+      }
+    }
+  }
+  return result
+}
+
+export function nearestPositionedTaxel(u: number, v: number, positions: PositionedTaxel[]) {
+  if (positions.length === 0) return null
+  return positions.reduce((nearest, candidate) => {
+    const distance = (candidate.u - u) ** 2 + (candidate.v - v) ** 2
+    const nearestDistance = (nearest.u - u) ** 2 + (nearest.v - v) ** 2
+    return distance < nearestDistance ? candidate : nearest
+  })
+}
+
 function rgba(color: [number, number, number, number]) {
   return `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3] / 255})`
 }
@@ -80,6 +129,7 @@ function drawHeatmap(
   height: number,
   region: TactileRegionFrame,
   values: number[],
+  positions: PositionedTaxel[],
   smooth: boolean,
 ) {
   const cellWidth = width / region.columns
@@ -87,13 +137,16 @@ function drawHeatmap(
   context.imageSmoothingEnabled = smooth
   context.fillStyle = '#081014'
   context.fillRect(0, 0, width, height)
-  for (let row = 0; row < region.rows; row += 1) {
-    for (let column = 0; column < region.columns; column += 1) {
-      const value = values[row * region.columns + column] ?? 0
-      context.fillStyle = rgba(heatColor(value))
-      const gap = smooth ? 0 : Math.max(0.45, Math.min(1.25, cellWidth * 0.06))
-      context.fillRect(column * cellWidth + gap / 2, row * cellHeight + gap / 2, cellWidth - gap, cellHeight - gap)
-    }
+  for (const position of positions) {
+    const value = values[position.row * region.columns + position.column] ?? 0
+    context.fillStyle = rgba(heatColor(value))
+    const gap = smooth ? 0 : Math.max(0.45, Math.min(1.25, cellWidth * 0.06))
+    context.fillRect(
+      position.u * width - cellWidth / 2 + gap / 2,
+      position.v * height - cellHeight / 2 + gap / 2,
+      cellWidth - gap,
+      cellHeight - gap,
+    )
   }
 }
 
@@ -103,6 +156,7 @@ function drawSurface(
   height: number,
   region: TactileRegionFrame,
   values: number[],
+  positions: PositionedTaxel[],
 ) {
   context.fillStyle = '#081014'
   context.fillRect(0, 0, width, height)
@@ -113,12 +167,11 @@ function drawSurface(
   const depthX = width * 0.18
   const peakHeight = height * 0.38
   const point = (row: number, column: number) => {
-    const rowUnit = row / Math.max(1, region.rows - 1)
-    const columnUnit = column / Math.max(1, region.columns - 1)
+    const position = positions[row * region.columns + column]!
     const value = values[row * region.columns + column] ?? 0
     return {
-      x: left + columnUnit * planeWidth + rowUnit * depthX,
-      y: top + rowUnit * planeHeight - value * peakHeight,
+      x: left + position.u * planeWidth + position.v * depthX,
+      y: top + position.v * planeHeight - value * peakHeight,
       value,
     }
   }
@@ -139,7 +192,7 @@ function drawSurface(
   }
 }
 
-function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view, selected, guide, onSelect }: {
+function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view, selected, guide, transform, onSelect }: {
   patch: TactilePatchLayout
   region: TactileRegionFrame | undefined
   baseline: number[] | undefined
@@ -149,6 +202,7 @@ function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view
   view: TactileAtlasView
   selected: TactileSelection | null
   guide: CalibrationGuide | undefined
+  transform?: BilinearTransform
   onSelect?: (row: number, column: number, value: number) => void
 }) {
   const { t } = useI18n()
@@ -156,6 +210,10 @@ function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view
   const normalized = useMemo(
     () => region ? normalizedValues(region, baseline, threshold, scale) : [],
     [baseline, region, scale, threshold],
+  )
+  const positions = useMemo(
+    () => region ? positionedTaxels(region.rows, region.columns, patch, transform) : [],
+    [patch, region, transform],
   )
   const peak = normalized.length ? Math.max(...normalized) : 0
 
@@ -171,21 +229,23 @@ function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view
       const context = canvas.getContext('2d')
       if (!context) return
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
-      if (view === 'surface') drawSurface(context, rect.width, rect.height, region, normalized)
-      else drawHeatmap(context, rect.width, rect.height, region, normalized, heatStyle === 'smooth')
+      if (view === 'surface') drawSurface(context, rect.width, rect.height, region, normalized, positions)
+      else drawHeatmap(context, rect.width, rect.height, region, normalized, positions, heatStyle === 'smooth')
       if (selected?.regionId === patch.id && view === 'heatmap') {
         const cellWidth = rect.width / region.columns
         const cellHeight = rect.height / region.rows
+        const position = positions[selected.row * region.columns + selected.column]
+        if (!position) return
         context.strokeStyle = '#ffffff'
         context.lineWidth = 1.5
-        context.strokeRect(selected.column * cellWidth + 1, selected.row * cellHeight + 1, cellWidth - 2, cellHeight - 2)
+        context.strokeRect(position.u * rect.width - cellWidth / 2 + 1, position.v * rect.height - cellHeight / 2 + 1, cellWidth - 2, cellHeight - 2)
       }
     }
     draw()
     const observer = new ResizeObserver(draw)
     observer.observe(canvas)
     return () => observer.disconnect()
-  }, [heatStyle, normalized, patch.id, region, selected, view])
+  }, [heatStyle, normalized, patch.id, positions, region, selected, view])
 
   const targetPositions: Record<CalibrationPoint, [number, number]> = {
     top_left: [12, 12], top_right: [88, 12], bottom_right: [88, 88], bottom_left: [12, 88], center: [50, 50],
@@ -202,7 +262,12 @@ function RegionPlot({ patch, region, baseline, threshold, scale, heatStyle, view
         if (!region || !onSelect) return
         const rect = canvasRef.current?.getBoundingClientRect()
         if (!rect) return
-        const { row, column } = taxelAtPoint(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height, region.rows, region.columns)
+        const hit = nearestPositionedTaxel(
+          (event.clientX - rect.left) / Math.max(1, rect.width),
+          (event.clientY - rect.top) / Math.max(1, rect.height),
+          positions,
+        )
+        const { row, column } = hit ?? taxelAtPoint(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height, region.rows, region.columns)
         onSelect(row, column, region.values[row * region.columns + column] ?? 0)
       }}
     >
@@ -253,6 +318,7 @@ export function TactileAtlas2D(props: Props) {
               view={props.view}
               selected={props.selection}
               guide={props.guide}
+              transform={props.calibration?.regions[patch.id]?.applied ? props.calibration.regions[patch.id]?.transform : undefined}
               onSelect={props.onSelect ? (row, column, value) => props.onSelect?.({ side: props.side, regionId: patch.id, row, column, value }) : undefined}
             />)}
           </div>)}

@@ -1,1 +1,1 @@
-"""Developer tools for the standalone vision viewer."""
+"""Developer tools for the D435 vision service."""

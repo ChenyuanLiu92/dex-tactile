@@ -74,9 +74,37 @@ def test_write_motion_uses_approved_registers_and_force():
 
     assert client.writes == [
         (SPEED_SET, [100, 260, 450, 100, 260, 450]),
-        (FORCE_SET, [220, 120, 120, 120, 220, 220]),
+        (FORCE_SET, [220, 120, 120, 120, 220, 500]),
         (ANGLE_SET, [800] * 6),
     ]
+
+
+def test_write_motion_does_not_restart_an_unchanged_position_target():
+    client = FakeClient()
+    driver = RH56Driver(client_factory=lambda *_args: client)
+    driver.connect()
+
+    driver.write_motion([200] * 6, [900] * 6)
+    driver.write_motion([200] * 6, [900] * 6)
+
+    assert [write for write in client.writes if write[0] == ANGLE_SET] == [
+        (ANGLE_SET, [200] * 6)
+    ]
+
+
+def test_write_motion_still_updates_speed_without_rewriting_position():
+    client = FakeClient()
+    driver = RH56Driver(client_factory=lambda *_args: client)
+    driver.connect()
+
+    driver.write_motion([200] * 6, [450] * 6)
+    driver.write_motion([200] * 6, [900] * 6)
+
+    assert [write for write in client.writes if write[0] == SPEED_SET] == [
+        (SPEED_SET, [450] * 6),
+        (SPEED_SET, [900] * 6),
+    ]
+    assert len([write for write in client.writes if write[0] == ANGLE_SET]) == 1
 
 
 def test_hold_reads_actual_then_writes_same_position():

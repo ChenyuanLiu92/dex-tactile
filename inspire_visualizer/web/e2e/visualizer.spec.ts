@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test'
 import { PNG } from 'pngjs'
 
+const DEVICE_WEBSOCKET = /^wss?:\/\/[^/]+\/api\/ws$/
+const VISION_WEBSOCKET = /^wss?:\/\/[^/]+\/vision\/api\/ws$/
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/control-owner', (route) => route.fulfill({ json: {
+    owner: 'vision',
+    vision_state: 'DISARMED',
+    manual_control_enabled: false,
+  } }))
+  await page.route('**/api/tactile-calibration/*', (route) => route.fulfill({ json: null }))
+  await page.routeWebSocket(VISION_WEBSOCKET, () => undefined)
+})
+
 const ONLINE_HAND = {
   connection: 'online',
   actual_angles: [800, 700, 600, 500, 650, 400],
@@ -22,7 +35,7 @@ test('renders both URDF hands on desktop and mobile', async ({ page }, testInfo)
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await page.addInitScript(() => localStorage.clear())
 
-  await page.routeWebSocket('**/api/ws', (socket) => {
+  await page.routeWebSocket(DEVICE_WEBSOCKET, (socket) => {
     const snapshot = JSON.stringify({
       type: 'snapshot',
       hands: {
@@ -30,10 +43,13 @@ test('renders both URDF hands on desktop and mobile', async ({ page }, testInfo)
         right: { side: 'right', ...ONLINE_HAND },
       },
     })
-    setTimeout(() => socket.send(snapshot), 100)
+    let closed = false
+    const timer = setTimeout(() => { if (!closed) socket.send(snapshot) }, 75)
+    socket.onClose(() => { closed = true; clearTimeout(timer) })
   })
 
   await page.goto('/')
+  await page.getByRole('button', { name: 'Digital Twin' }).click()
   await expect(page.getByRole('button', { name: 'Left' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Right' })).toBeVisible()
   await expect(page.getByRole('spinbutton', { name: 'J1 Little position' })).toHaveValue('800')
@@ -45,7 +61,7 @@ test('renders both URDF hands on desktop and mobile', async ({ page }, testInfo)
   await page.waitForTimeout(500)
 
   const sceneShell = page.getByTestId('scene-shell')
-  const canvas = page.locator('canvas')
+  const canvas = sceneShell.locator('canvas')
   await expect(sceneShell).toHaveAttribute('data-grid-level', 'standard')
   const canvasBox = await canvas.boundingBox()
   expect(canvasBox).not.toBeNull()
@@ -167,7 +183,7 @@ test('renders both URDF hands on desktop and mobile', async ({ page }, testInfo)
   expect(pageErrors).toEqual([])
 })
 
-test('renders a complete piezoresistive frame on the left 3D hand', async ({ page }, testInfo) => {
+test('renders a complete piezoresistive frame in the 2D atlas and combined view', async ({ page }, testInfo) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   const shapes = [
@@ -179,8 +195,9 @@ test('renders a complete piezoresistive frame on the left 3D hand', async ({ pag
     ['thumb_pad', 12, 8], ['palm', 8, 14],
   ] as const
 
-  await page.routeWebSocket('**/api/ws', (socket) => {
-    setTimeout(() => socket.send(JSON.stringify({
+  await page.routeWebSocket(DEVICE_WEBSOCKET, (socket) => {
+    let closed = false
+    const snapshotTimer = setTimeout(() => { if (!closed) socket.send(JSON.stringify({
       type: 'snapshot',
       hands: {
         left: { side: 'left', ...ONLINE_HAND },
@@ -190,8 +207,8 @@ test('renders a complete piezoresistive frame on the left 3D hand', async ({ pag
           tactile: { profile: 'disabled', state: 'off', target_hz: 20, sample_hz: 0, updated_at: null, error: null },
         },
       },
-    })), 100)
-    setTimeout(() => socket.send(JSON.stringify({
+    })) }, 75)
+    const tactileTimer = setTimeout(() => { if (!closed) socket.send(JSON.stringify({
       type: 'tactile_frame',
       side: 'left',
       profile: 'piezoresistive_v1',
@@ -203,38 +220,48 @@ test('renders a complete piezoresistive frame on the left 3D hand', async ({ pag
           (index + regionIndex * 17) % 1800,
         ),
       })),
-    })), 220)
+    })) }, 140)
+    socket.onClose(() => {
+      closed = true
+      clearTimeout(snapshotTimer)
+      clearTimeout(tactileTimer)
+    })
   })
 
   await page.goto('/')
+  await page.getByRole('button', { name: 'Digital Twin' }).click()
   await expect(page.getByRole('button', { name: 'Tactile', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Tactile', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Surface telemetry' })).toBeVisible()
   await expect(page.getByText('PIEZO / 1062')).toBeVisible()
-  await expect(page.getByTestId('scene-shell')).toHaveAttribute('data-workspace-mode', 'tactile')
-  await page.waitForFunction(() =>
-    performance.getEntriesByType('resource').filter((entry) => entry.name.endsWith('.STL')).length >= 13,
-  )
-  await page.waitForTimeout(500)
+  const atlas = page.getByTestId('tactile-atlas').filter({ visible: true })
+  await expect(atlas).toHaveClass(/view-heatmap/)
+  await expect(atlas.getByRole('button', { name: 'Palm' })).toBeVisible()
+  await page.getByRole('button', { name: 'Surface', exact: true }).click()
+  await expect(atlas).toHaveClass(/view-surface/)
   await page.screenshot({ path: testInfo.outputPath('desktop-left-tactile.png'), fullPage: true })
 
   await page.getByRole('button', { name: 'Motion + Tactile' }).click()
-  await expect(page.getByTestId('scene-shell')).toHaveAttribute('data-workspace-mode', 'combined')
-  await expect(page.getByRole('heading', { name: 'Left hand' })).toBeVisible()
-  await expect(page.getByLabel('Tactile heat scale')).toBeVisible()
-  await page.getByRole('spinbutton', { name: 'J1 Little position' }).fill('200')
+  await expect(page.locator('.combined-workspace')).toBeVisible()
+  await expect(page.locator('.combined-workspace').getByTestId('scene-shell')).toHaveAttribute('data-workspace-mode', 'motion')
+  await expect(page.locator('.combined-workspace').getByTestId('tactile-atlas')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Surface telemetry' })).toBeVisible()
   await page.waitForTimeout(200)
   await page.screenshot({ path: testInfo.outputPath('desktop-left-combined.png'), fullPage: true })
 
-  const canvasImage = PNG.sync.read(await page.getByTestId('scene-shell').locator('canvas').screenshot())
-  let heatPixels = 0
+  const palmCanvas = page.locator('.combined-workspace')
+    .getByTestId('tactile-atlas')
+    .getByRole('button', { name: 'Palm' })
+    .locator('canvas')
+  const canvasImage = PNG.sync.read(await palmCanvas.screenshot())
+  const surfaceColors = new Set<string>()
   for (let index = 0; index < canvasImage.data.length; index += 4) {
     const red = canvasImage.data[index]
     const green = canvasImage.data[index + 1]
     const blue = canvasImage.data[index + 2]
-    if ((red > 150 && green > 70 && red > blue * 1.3) || (blue > 90 && green > 100)) heatPixels += 1
+    surfaceColors.add(`${red >> 3},${green >> 3},${blue >> 3}`)
   }
-  expect(heatPixels).toBeGreaterThan(120)
+  expect(surfaceColors.size).toBeGreaterThan(8)
   expect(pageErrors).toEqual([])
 })
 
@@ -246,16 +273,18 @@ test('switches the complete workstation surface to Chinese while preserving engi
       right: { enabled: false, host: '192.0.2.11', port: 6000, tactile_profile: 'disabled', tactile_target_hz: 20 },
     },
   }))
-  await page.routeWebSocket('**/api/ws', (socket) => {
-    setTimeout(() => socket.send(JSON.stringify({
+  await page.routeWebSocket(DEVICE_WEBSOCKET, (socket) => {
+    socket.send(JSON.stringify({
       type: 'snapshot',
       hands: {
         left: { side: 'left', ...ONLINE_HAND },
         right: { side: 'right', connection: 'offline', actual_angles: null, armed: false, updated_at: null, error: null, tactile: { profile: 'disabled', state: 'off', target_hz: 20, sample_hz: 0, updated_at: null, error: null } },
       },
-    })), 50)
+    }))
     let sequence = 0
+    let closed = false
     const timer = setInterval(() => {
+      if (closed) return
       sequence += 1
       socket.send(JSON.stringify({
         type: 'tactile_frame', side: 'left', profile: 'piezoresistive_v1', sequence, captured_at: sequence,
@@ -263,9 +292,11 @@ test('switches the complete workstation surface to Chinese while preserving engi
       }))
       if (sequence >= 30) clearInterval(timer)
     }, 80)
+    socket.onClose(() => { closed = true; clearInterval(timer) })
   })
 
   await page.goto('/')
+  await page.getByRole('button', { name: 'Digital Twin' }).click()
   await expect(page.getByRole('button', { name: '中文' })).toBeVisible()
   await page.getByRole('button', { name: '中文' }).click()
 
@@ -290,11 +321,11 @@ test('switches the complete workstation surface to Chinese while preserving engi
   await expect(page.getByRole('heading', { name: '表面触觉遥测' })).toBeVisible()
   await expect(page.getByText('PIEZO / 1062')).toBeVisible()
   await expect(page.getByText('接触区域')).toBeVisible()
-  await expect(page.getByText('食指指尖', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '食指指尖' })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('desktop-chinese-ui.png'), fullPage: true })
 })
 
-test('guides tactile calibration directly on the 3D hand surface', async ({ page }, testInfo) => {
+test('guides tactile calibration directly on the 2D hand atlas', async ({ page }, testInfo) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
   let pressed = false
@@ -315,7 +346,7 @@ test('guides tactile calibration directly on the 3D hand surface', async ({ page
     if (route.request().method() === 'GET') await route.fulfill({ json: null })
     else await route.fulfill({ json: JSON.parse(route.request().postData() ?? '{}') })
   })
-  await page.routeWebSocket('**/api/ws', (socket) => {
+  await page.routeWebSocket(DEVICE_WEBSOCKET, (socket) => {
     socket.send(JSON.stringify({
       type: 'snapshot',
       hands: {
@@ -324,7 +355,9 @@ test('guides tactile calibration directly on the 3D hand surface', async ({ page
       },
     }))
     let sequence = 0
+    let closed = false
     const timer = setInterval(() => {
+      if (closed) return
       sequence += 1
       socket.send(JSON.stringify({
         type: 'tactile_frame', side: 'left', profile: 'piezoresistive_v1', sequence, captured_at: sequence,
@@ -334,19 +367,20 @@ test('guides tactile calibration directly on the 3D hand surface', async ({ page
         })),
       }))
     }, 200)
-    socket.onClose(() => clearInterval(timer))
+    socket.onClose(() => { closed = true; clearInterval(timer) })
   })
 
   await page.goto('/')
+  await page.getByRole('button', { name: 'Digital Twin' }).click()
   await page.getByRole('button', { name: 'Tactile', exact: true }).click()
   await page.getByRole('button', { name: 'Calibrate map' }).click()
-  const dialog = page.getByRole('dialog', { name: '3D tactile calibration' })
+  const dialog = page.getByRole('dialog', { name: '2D tactile calibration' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Zero sensors' })).toBeEnabled()
   await dialog.getByRole('button', { name: 'Zero sensors' }).click()
   await expect(dialog.getByRole('heading', { name: 'Little Tip End' })).toBeVisible({ timeout: 12_000 })
   await expect(dialog.getByText('Waiting for contact')).toBeVisible()
-  await dialog.locator('canvas').waitFor({ state: 'visible' })
+  await dialog.getByRole('button', { name: 'Little Tip End' }).locator('canvas').waitFor({ state: 'visible' })
   await page.waitForTimeout(1_000)
 
   pressed = true

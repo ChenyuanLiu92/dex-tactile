@@ -4,12 +4,13 @@ import type { TrackingSnapshot } from './api'
 import { CameraPanel } from './camera/CameraPanel'
 import { ControlPanel } from './control/ControlPanel'
 import { RobotScene } from './scene/RobotScene'
+import { OperatorProfileControl } from './profile/OperatorProfileControl'
 import { TelemetryPanel } from './telemetry/TelemetryPanel'
 import { useI18n } from '../i18n/I18nProvider'
 import { TRACKING_STATUS_KEYS } from './statusLabels'
 import './styles.css'
 
-export function VisionWorkbench({ snapshot }: { snapshot: TrackingSnapshot }) {
+export function VisionWorkbench({ snapshot, controlEnabled = true }: { snapshot: TrackingSnapshot; controlEnabled?: boolean }) {
   const { locale, t } = useI18n()
   const alert = snapshot.status === 'CAMERA_ERROR' || snapshot.status === 'WRONG_HAND'
 
@@ -23,7 +24,15 @@ export function VisionWorkbench({ snapshot }: { snapshot: TrackingSnapshot }) {
         </div>
         <div className="system-strip">
           <span className="safety"><ShieldOff size={14} />{t('vision.softwareHold')}</span>
-          <ControlPanel control={snapshot.control} trackingStatus={snapshot.status} />
+          <OperatorProfileControl
+            current={snapshot.operator_profile}
+            calibration={snapshot.retargeting_calibration}
+            controlState={snapshot.control.state}
+            trackingStatus={snapshot.status}
+            detectedHands={snapshot.detected_hands ?? []}
+            landmarks={snapshot.landmarks_2d}
+          />
+          <ControlPanel control={snapshot.control} trackingStatus={snapshot.status} controlEnabled={controlEnabled} />
           <span className={`tracking-state ${alert ? 'state-alert' : ''}`}>
             <i />{t(TRACKING_STATUS_KEYS[snapshot.status])}
           </span>

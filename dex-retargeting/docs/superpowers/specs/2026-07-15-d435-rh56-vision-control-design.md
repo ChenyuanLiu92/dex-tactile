@@ -68,7 +68,7 @@ Per-channel absolute error selects a motion band with hysteresis:
 - maximum steps per 30 Hz cycle: `[20, 60, 120]`
 - speed register values: `[100, 260, 450]`
 - hysteresis: `10`
-- force values: `[220, 120, 120, 120, 220, 220]`
+- force values: `[220, 120, 120, 120, 220, 500]`
 
 Inside the deadband, the previous commanded position is retained. Outside it, the
 command advances toward the vision target by no more than the active band's step.
