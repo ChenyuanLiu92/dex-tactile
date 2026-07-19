@@ -1,5 +1,7 @@
 # Dex Tactile
 
+[简体中文](README.md) | [English](README.en.md)
+
 Dex Tactile 是面向 Inspire Robots RH56DFTP 六驱动通道压阻式触觉灵巧手的科研工作台。
 项目将 D435 RGB 手部追踪、URDF 约束重定向、Quest/Open-Teach 遥操作、受保护的
 Modbus TCP 控制、二维触觉热力图/三维山峰图和 HDF5 手部数据采集整合在同一仓库中。
@@ -175,7 +177,7 @@ Quest 方案至少需要工作站监听 `8087` 接收关键点；Open-Teach 还�
 
 ## 启动统一工作台
 
-确保两个前端已经 build，然后运行：
+确保统一前端已经 build，然后运行：
 
 ```bash
 ./scripts/run_web.sh
@@ -477,27 +479,3 @@ Rollback:
 
 真机控制进入 `RECOVERY HOLD` 并等待恢复；数据采集继续写无效 tracking 帧。若机械动作异常，
 不要等待软件恢复，直接 E-STOP 或物理断电。
-
-## English quick start
-
-This repository targets an Inspire RH56DFTP right hand with a D435 RGB camera and optional
-Quest 3. All committed network addresses are non-routable documentation examples.
-
-```bash
-uv sync --all-groups
-brew install librealsense jpeg-turbo  # macOS D435 RGB bridge
-cp .env.example .env
-cp inspire_visualizer/config/hands.example.json inspire_visualizer/config/hands.json
-# Edit both local files with your hardware endpoints.
-
-npm ci --prefix inspire_visualizer/web
-npm run build --prefix inspire_visualizer/web
-
-./scripts/run_web.sh                 # unified workbench
-./scripts/run_openteach.sh           # Quest dry-run
-./scripts/run_openteach.sh --live    # Quest live control; stop Viewer first
-./scripts/record_hand.sh --task "pinch" --operator "operator-01" --duration 60
-```
-
-Keep physical power removal accessible, validate every mapping in dry-run, and never commit local
-IP addresses, calibration files, datasets, logs, or participant identifiers.
