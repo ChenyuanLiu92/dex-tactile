@@ -23,7 +23,8 @@
   <a href="#控制架构">控制架构</a> ·
   <a href="#硬件">硬件</a> ·
   <a href="#d435-dry-run-与操作者-profile-标定">遥操作</a> ·
-  <a href="#手部数据采集">数据采集</a>
+  <a href="#手部数据采集">数据采集</a> ·
+  <a href="CONTRIBUTING.zh-CN.md">贡献指南</a>
 </p>
 
 </div>
@@ -464,13 +465,14 @@ HDF5 是当前 canonical 格式，因为数据是多速率压缩数值流。字�
 后端检查：
 
 ```bash
-uv run ruff check hand_data_collection inspire_visualizer/backend unified_web scripts/tests \
-  dex-retargeting/viewer dex-retargeting/src/dex_retargeting/inspire_retargeting.py
+uv run ruff check hand_data_collection inspire_visualizer/backend/src unified_web \
+  dex-retargeting/viewer/backend \
+  dex-retargeting/src/dex_retargeting/inspire_retargeting.py \
+  Open-Teach/openteach/robot/inspire \
+  Open-Teach/openteach/components/operators/inspire.py
 uv run pyright
 uv run pytest -q
-
-uv run pytest -q dex-retargeting/viewer/backend/tests
-uv run pytest -q Open-Teach/tests
+uv run pytest -q dex-retargeting/tests dex-retargeting/viewer/backend/tests Open-Teach/tests
 ```
 
 前端检查：
@@ -480,6 +482,9 @@ npm test --prefix inspire_visualizer/web -- --run
 npm run typecheck --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
 ```
+
+浏览器、RealSense、retargeting、触觉、控制和数据相关证据要求见
+[贡献者验证矩阵](CONTRIBUTING.zh-CN.md#验证矩阵)。
 
 独立前端开发服务器：
 
@@ -492,24 +497,17 @@ npm run dev --prefix inspire_visualizer/web
 
 ## 团队协作约定
 
-1. 从短生命周期 feature branch 开发，通过 PR 合并。
-2. 不直接修改 `inspire_doc/` 中的厂家原始文件；衍生结论写到项目文档或代码中。
-3. 不提交 `.env`、`hands.json`、个人标定、数据集、日志、截图中的地址或本机绝对路径。
-4. 算法改动应附自动化测试和 dry-run 手势矩阵结果。
-5. Modbus、速度、力或 pose 改动应在 PR 中记录真机型号、验证步骤和安全边界，不记录设备 IP。
-6. 修改第三方目录时保留原许可证，并同步更新 [THIRD_PARTY.md](THIRD_PARTY.md)。
-7. 提交前运行 `git status --ignored`，确认本地配置和数据处于 ignored 状态。
+创建 Pull Request 前请阅读 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。其中定义了分支与
+commit 规范、各子系统验证门槛、真机验证级别、隐私规则、Review 标准和合并策略。GitHub 会在
+创建 PR 时自动插入仓库模板。
 
-建议 PR 描述包含：
+简要规则：
 
-```text
-Summary:
-Risk / hardware impact:
-Tests:
-Dry-run evidence:
-Physical verification (if any):
-Rollback:
-```
+1. 使用短生命周期 `<type>/<description>` 分支，禁止直接向 `main` 推送。
+2. 一个 PR 只解决一个目标，行为改动与测试、文档一起提交。
+3. 真机证据必须准确标记为 `Not hardware tested`、`Dry-run verified` 或 `Hardware verified`。
+4. 禁止提交本地端点、Profile、标定、数据集、日志、身份信息或生成文件。
+5. 影响硬件的改动必须提供明确安全 Review、dry-run 证据和回滚路径。
 
 ## 常见问题
 

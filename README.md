@@ -23,7 +23,8 @@
   <a href="#control-architecture">Architecture</a> ·
   <a href="#hardware">Hardware</a> ·
   <a href="#d435-dry-run-and-operator-profile-calibration">Teleoperation</a> ·
-  <a href="#hand-data-collection">Data collection</a>
+  <a href="#hand-data-collection">Data collection</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 </div>
@@ -495,13 +496,14 @@ Hugging Face Hub publishing becomes necessary.
 Backend checks:
 
 ```bash
-uv run ruff check hand_data_collection inspire_visualizer/backend unified_web scripts/tests \
-  dex-retargeting/viewer dex-retargeting/src/dex_retargeting/inspire_retargeting.py
+uv run ruff check hand_data_collection inspire_visualizer/backend/src unified_web \
+  dex-retargeting/viewer/backend \
+  dex-retargeting/src/dex_retargeting/inspire_retargeting.py \
+  Open-Teach/openteach/robot/inspire \
+  Open-Teach/openteach/components/operators/inspire.py
 uv run pyright
 uv run pytest -q
-
-uv run pytest -q dex-retargeting/viewer/backend/tests
-uv run pytest -q Open-Teach/tests
+uv run pytest -q dex-retargeting/tests dex-retargeting/viewer/backend/tests Open-Teach/tests
 ```
 
 Frontend checks:
@@ -511,6 +513,9 @@ npm test --prefix inspire_visualizer/web -- --run
 npm run typecheck --prefix inspire_visualizer/web
 npm run build --prefix inspire_visualizer/web
 ```
+
+See the [contributor verification matrix](CONTRIBUTING.md#verification-matrix) for browser,
+RealSense, retargeting, tactile, control, and data-specific evidence requirements.
 
 Standalone frontend development server:
 
@@ -523,29 +528,19 @@ the unified backend, but only one controller may own Modbus writes.
 
 ## Team workflow
 
-1. Develop on short-lived feature branches and merge through pull requests.
-2. Do not modify manufacturer originals under `inspire_doc/`; put derived conclusions in project
-   documentation or code.
-3. Do not commit `.env`, `hands.json`, personal calibration, datasets, logs, screenshot addresses,
-   or absolute local paths.
-4. Include automated tests and a dry-run gesture matrix with algorithm changes.
-5. For Modbus, speed, force, or pose changes, document the hand model, validation procedure, and
-   safety boundaries in the PR, but never the device IP.
-6. Preserve upstream licenses when modifying third-party directories and update
-   [THIRD_PARTY.md](THIRD_PARTY.md).
-7. Run `git status --ignored` before committing and verify that local configuration and data remain
-   ignored.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. It defines branch and commit
+conventions, subsystem-specific verification gates, hardware validation levels, privacy rules,
+review criteria, and merge policy. GitHub automatically inserts the repository PR template.
 
-Suggested pull-request template:
+The short version:
 
-```text
-Summary:
-Risk / hardware impact:
-Tests:
-Dry-run evidence:
-Physical verification (if any):
-Rollback:
-```
+1. Work on a short-lived `<type>/<description>` branch; never push directly to `main`.
+2. Keep one PR focused on one outcome and include tests and documentation with the behavior change.
+3. Report hardware evidence accurately as `Not hardware tested`, `Dry-run verified`, or
+   `Hardware verified`.
+4. Never commit local endpoints, Profiles, calibration, datasets, logs, identities, or generated
+   files.
+5. Hardware-affecting changes require explicit safety review, dry-run evidence, and a rollback path.
 
 ## Troubleshooting
 
