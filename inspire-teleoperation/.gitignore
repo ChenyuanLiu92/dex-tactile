@@ -1,0 +1,24 @@
+# Virtual environments
+.venv/
+
+# Python bytecode and cache files
+__pycache__/
+*.py[cod]
+
+# Development tool caches
+.pytest_cache/
+.ruff_cache/
+
+# Local test suite
+tests/
+
+# Local tactile capture data
+tactile_captures/
+
+# Local agent instructions
+AGENTS.md
+
+# Build artifacts and package metadata
+build/
+dist/
+*.egg-info/
